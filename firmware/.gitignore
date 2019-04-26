@@ -1,0 +1,8 @@
+.vscode/
+.vs/
+Release/
+Debug/
+__vm/
+*.sln
+*.vcxproj
+*.vcxproj.filters
