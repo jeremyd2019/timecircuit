@@ -30,7 +30,7 @@ static const uint8_t SWIZZLE_N_BITS[28] PROGMEM = {
 	4, 5, 27, 28, 29, 3, 2
 };
 
-// MMM DD YYYY HH(colon)MM(am/pm)
+// MMM DD YYYY(am/pm)HH(colon)MM
 // I'm thinking YYYY on bank 1, HHMM plus am/pm leds on bank 0, and DD plus colon on bank 2
 void writeDigit(MultiplexMM5450 & color, uint8_t bankno, uint8_t digitno, uint8_t digit)
 {
