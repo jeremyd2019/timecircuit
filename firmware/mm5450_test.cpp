@@ -45,7 +45,7 @@ void setup() {
 
 	set_zone(-8 * ONE_HOUR);
 	set_dst(usa_dst);
-	set_system_time(pgm_read_dword(&INITIAL_TIME) - UNIX_OFFSET);
+	set_system_time(pgm_read_dword(&INITIAL_TIME));
 	SPI.begin();
 	RED.initialize();
 	YELLOW.initialize();

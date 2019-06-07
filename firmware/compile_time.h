@@ -1,4 +1,4 @@
-/* 
+/* https://stackoverflow.com/a/44271643
  *
  * Created: 29.03.2018
  *
@@ -79,10 +79,6 @@
         /* December */ + (month >= 12 ? 30UL : 0UL) \
     )
 
-#ifndef __TIMEZONE_OFFSET_SECS__
-#define __TIMEZONE_OFFSET_SECS__ 0
-#endif
-
 // get the UNIX timestamp from a digits representation
 #define _UNIX_TIMESTAMP(year, month, day, hour, minute, second) \
     ( /* time */ second \
@@ -93,7 +89,6 @@
                 + ((year - 1969UL) / 4UL) * SEC_PER_DAY \
                 - ((year - 1901UL) / 100UL) * SEC_PER_DAY \
                 + ((year - 1601UL) / 400UL) * SEC_PER_DAY \
-                - __TIMEZONE_OFFSET_SECS__ \
     )
 
 // the UNIX timestamp
