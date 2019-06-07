@@ -54,11 +54,27 @@ void setup() {
 	RED.assignLedRange(0, 1, 30, 0x3FFFFFFF);
 	RED.assignLedRange(1, 1, 30, 0x3FFFFFFF);
 	RED.assignLedRange(2, 1, 30, 0x3FFFFFFF);
+	Serial.begin(115200);
 }
 
 void loop() {
 	// put your main code here, to run repeatedly:
 	myDoStuff();
+	static time_t serial_input = 0;
+	while (Serial.available())
+	{
+		int ch = Serial.read();
+		if (ch >= '0' && ch <= '9')
+		{
+			serial_input = serial_input * 10 + (ch - '0');
+		}
+		else
+		{
+			if ((ch == '\r' || ch == '\n') && serial_input != 0)
+				set_system_time(serial_input - UNIX_OFFSET);
+			serial_input = 0;
+		}
+	}
 	static time_t last_now = (time_t)-1;
 	time_t now;
 	time(&now);
