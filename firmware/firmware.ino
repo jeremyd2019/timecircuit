@@ -7,7 +7,7 @@
 #include "compile_time.h"
 
 // Tomohiko Sakamoto's algorithm for day of week, with slight stylistic tweaks for use in macro
-#define GET_DOW(y,m,d) (((y-(m<3))+(y-(m<3))/4-(y-(m<3))/100+(y-(m<3))/400+*("-bed=pen+mad."+m)+d)%7)
+#define GET_DOW(y,m,d) (((y-(m<3))+(y-(m<3))/4-(y-(m<3))/100+(y-(m<3))/400+("-bed=pen+mad.")[m]+d)%7)
 
 #define IS_USA_DST ( \
     (__TIME_MONTH__ > 3 || (__TIME_MONTH__ == 3 && __TIME_DAYS__ > 8+(7-GET_DOW(__TIME_YEARS__,3,8))%7) || \
