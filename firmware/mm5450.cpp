@@ -20,7 +20,7 @@ void MultiplexMM5450::initialize()
 	pinMode(m_ss_pin, OUTPUT);
 }
 
-void MultiplexMM5450::refreshBank(uint8_t bankno)
+void MultiplexMM5450::refreshBank(uint8_t bankno) const
 {
 	assert(bankno < 3);
 	SPI.beginTransaction(SPISettings(500000, LSBFIRST, SPI_MODE0));

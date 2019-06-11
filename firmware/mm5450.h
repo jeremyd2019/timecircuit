@@ -8,7 +8,7 @@ public:
 	MultiplexMM5450(uint8_t ss_pin);
 
 	void initialize();
-	void refreshBank(uint8_t bankno);
+	void refreshBank(uint8_t bankno) const;
 
 	inline void setLed(uint8_t bankno, uint8_t ledno)
 	{
@@ -50,9 +50,13 @@ private:
 		{
 			return a[i];
 		}
+		inline const uint8_t & operator[] (const size_t i) const
+		{
+			return a[i];
+		}
 	};
 	LEDBank m_banks[3];
-	uint8_t m_ss_pin;
+	const uint8_t m_ss_pin;
 };
 
 #endif // MM5450_H_354624
