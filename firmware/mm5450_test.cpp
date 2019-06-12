@@ -17,22 +17,6 @@ ISR(TIMER1_OVF_vect, ISR_NAKED)
 
 MultiplexMM5450 RED(9), YELLOW(8), GREEN(7);
 
-static const unsigned long DELAYTIME = 3;
-void myDoStuff()
-{
-	static unsigned long lastUpdate = 0 - DELAYTIME - 1;
-	static uint8_t stage = 0;
-	if ((millis() - lastUpdate) >= DELAYTIME)
-	{
-		RED.refreshBank(stage);
-		YELLOW.refreshBank(stage);
-		GREEN.refreshBank(stage);
-		lastUpdate = millis();
-		if (++stage >= 3)
-			stage = 0;
-	}
-}
-
 extern const uint32_t PROGMEM INITIAL_TIME;
 
 void setup() {
@@ -59,7 +43,7 @@ void setup() {
 
 void loop() {
 	// put your main code here, to run repeatedly:
-	myDoStuff();
+	MultiplexMM5450::process({&RED, &YELLOW, &GREEN});
 	static time_t serial_input = 0;
 	while (Serial.available())
 	{
