@@ -10,7 +10,7 @@ public:
 	void initialize();
 	void refreshBank(uint8_t bankno) const;
 
-	template<uint8_t N, uint8_t DELAYTIME = 3>
+	template<uint8_t DELAYTIME = 3, uint8_t N>
 	static void process(const MultiplexMM5450 * const (&chips)[N])
 	{
 		static uint16_t lastUpdate = 0 - DELAYTIME - 1;
