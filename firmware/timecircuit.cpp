@@ -69,13 +69,15 @@ typedef struct {
 
 #ifdef __AVR__
 extern qdiv_t qdiv(int8_t __num, int8_t __denom) __asm__("__divmodqi4") __ATTR_CONST__;
+}
 #else
-inline qdiv_t qdiv(int8_t __num, int8_t __denom)
+}
+constexpr qdiv_t qdiv(const int8_t __num, const int8_t __denom) __ATTR_CONST__;
+constexpr qdiv_t qdiv(const int8_t __num, const int8_t __denom)
 {
-	return {__num / __denom, __num % __denom};
+	return {static_cast<int8_t>(__num / __denom), static_cast<int8_t>(__num % __denom)};
 }
 #endif
-}
 
 void loop() {
 	// put your main code here, to run repeatedly:
