@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include <assert.h>
 #include <SPI.h>
-
-#include "mm5450.h"
+#include <mm5450.h>
 
 #include <time.h>
 #include <util/usa_dst.h>
