@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <assert.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <mm5450.h>
 
 #include <time.h>
 #include <util/usa_dst.h>
 
 #include "seven_seg.h"
+#include "fourteen_seg.h"
 
 ISR(TIMER1_OVF_vect, ISR_NAKED)
 {
@@ -15,6 +17,8 @@ ISR(TIMER1_OVF_vect, ISR_NAKED)
 }
 
 MultiplexMM5450 RED(9), YELLOW(8), GREEN(7);
+
+HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70);
 
 extern const uint32_t PROGMEM INITIAL_TIME;
 
@@ -33,12 +37,28 @@ void setup() {
 	RED.initialize();
 	YELLOW.initialize();
 	GREEN.initialize();
+	Wire.begin();
+	RED_MONTH.systemSetup(true);
+	RED_MONTH.dimmingSet(5);
 	// nice all-LEDs-on test pattern
+	RED_MONTH.writeDigitRaw(0, 0xFFFF);
+	RED_MONTH.writeDigitRaw(1, 0xFFFF);
+	RED_MONTH.writeDigitRaw(2, 0xFFFF);
+	RED_MONTH.writeDigitRaw(3, 0xFFFF);
+	RED_MONTH.writeDisplay();
+	RED_MONTH.displaySetup(true);
 	RED.assignLedRange(0, 1, 30, 0x3FFFFFFF);
 	RED.assignLedRange(1, 1, 30, 0x3FFFFFFF);
 	RED.assignLedRange(2, 1, 30, 0x3FFFFFFF);
 	Serial.begin(115200);
 }
+
+static const char MONTHS[12][3] PROGMEM = {
+	{'J','A','N'}, {'F','E','B'}, {'M','A','R'},
+	{'A','P','R'}, {'M','A','Y'}, {'J','U','N'},
+	{'J','U','L'}, {'A','U','G'}, {'S','E','P'},
+	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
+};
 
 void loop() {
 	// put your main code here, to run repeatedly:
@@ -90,6 +110,18 @@ void loop() {
 		uint8_t colon = curtm->tm_sec & 1;
 		RED.assignLed(2,  1, colon);
 		RED.assignLed(2, 30, colon);
+
+		static int8_t last_month = -1;
+		if (last_month != curtm->tm_mon)
+		{
+			const char * monthabbr = MONTHS[curtm->tm_mon];
+			RED_MONTH.writeDigitRaw(0, 0x0);
+			RED_MONTH.writeDigitAscii(1, pgm_read_byte(&monthabbr[0]));
+			RED_MONTH.writeDigitAscii(2, pgm_read_byte(&monthabbr[1]));
+			RED_MONTH.writeDigitAscii(3, pgm_read_byte(&monthabbr[2]));
+			RED_MONTH.writeDisplay();
+			last_month = curtm->tm_mon;
+		}
 
 		last_now = now;
 	}
