@@ -60,6 +60,23 @@ static const char MONTHS[12][3] PROGMEM = {
 	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
 };
 
+// struct and function prototype stolen from AVR stdlib.h, and adapted for qi4 (aka int8_t, or char)
+extern "C" {
+typedef struct {
+	int8_t quot;
+	int8_t rem;
+} qdiv_t;
+
+#ifdef __AVR__
+extern qdiv_t qdiv(int8_t __num, int8_t __denom) __asm__("__divmodqi4") __ATTR_CONST__;
+#else
+inline qdiv_t qdiv(int8_t __num, int8_t __denom)
+{
+	return {__num / __denom, __num % __denom};
+}
+#endif
+}
+
 void loop() {
 	// put your main code here, to run repeatedly:
 	MultiplexMM5450::process({&RED, &YELLOW, &GREEN});
@@ -92,21 +109,29 @@ void loop() {
 		if (twelvehour == 0)
 			twelvehour = 12;
 		bool pm = curtm->tm_hour >= 12;
-		writeDigit(RED, 0, 0, curtm->tm_min % 10);
-		writeDigit(RED, 0, 1, (curtm->tm_min / 10) % 10);
+		qdiv_t tmp = qdiv(curtm->tm_min, 10);
+		writeDigit(RED, 0, 0, tmp.rem);
+		tmp = qdiv(tmp.quot, 10);
+		writeDigit(RED, 0, 1, tmp.rem);
 		writeDigit(RED, 0, 2, twelvehour % 10);
 		writeDigit(RED, 0, 3, (twelvehour / 10) % 10);
 		RED.assignLed(0, 1, !pm);
 		RED.assignLed(0, 30, pm);
 
 		int16_t year = curtm->tm_year + 1900;
-		writeDigit(RED, 1, 0, year % 10);
-		writeDigit(RED, 1, 1, (year / 10) % 10);
-		writeDigit(RED, 1, 2, (year / 100) % 10);
-		writeDigit(RED, 1, 3, (year / 1000) % 10);
+		div_t tmp2 = div(year, 10);
+		writeDigit(RED, 1, 0, tmp2.rem);
+		tmp2 = div(tmp2.quot, 10);
+		writeDigit(RED, 1, 1, tmp2.rem);
+		tmp2 = div(tmp2.quot, 10);
+		writeDigit(RED, 1, 2, tmp2.rem);
+		tmp2 = div(tmp2.quot, 10);
+		writeDigit(RED, 1, 3, tmp2.rem);
 
-		writeDigit(RED, 2, 0, curtm->tm_mday % 10);
-		writeDigit(RED, 2, 1, (curtm->tm_mday / 10) % 10);
+		tmp = qdiv(curtm->tm_mday, 10);
+		writeDigit(RED, 2, 0, tmp.rem);
+		tmp = qdiv(tmp.quot, 10);
+		writeDigit(RED, 2, 1, tmp.rem);
 		uint8_t colon = curtm->tm_sec & 1;
 		RED.assignLed(2,  1, colon);
 		RED.assignLed(2, 30, colon);
