@@ -7,6 +7,8 @@
 #include <time.h>
 #include <util/usa_dst.h>
 
+#include "divmod.h"
+
 #include "seven_seg.h"
 #include "fourteen_seg.h"
 
@@ -60,25 +62,6 @@ static const char MONTHS[12][3] PROGMEM = {
 	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
 };
 
-// struct and function prototype stolen from AVR stdlib.h, and adapted for qi4 (aka int8_t, or char)
-extern "C" {
-typedef struct {
-	int8_t quot;
-	int8_t rem;
-} qdiv_t;
-
-#ifdef __AVR__
-extern qdiv_t qdiv(int8_t __num, int8_t __denom) __asm__("__divmodqi4") __ATTR_CONST__;
-}
-#else
-}
-constexpr qdiv_t qdiv(const int8_t __num, const int8_t __denom) __ATTR_CONST__;
-constexpr qdiv_t qdiv(const int8_t __num, const int8_t __denom)
-{
-	return {static_cast<int8_t>(__num / __denom), static_cast<int8_t>(__num % __denom)};
-}
-#endif
-
 void loop() {
 	// put your main code here, to run repeatedly:
 	MultiplexMM5450::process({&RED, &YELLOW, &GREEN});
@@ -107,32 +90,40 @@ void loop() {
 		RED.assignLed(2, 31, now & 4);
 
 		struct tm * curtm = localtime(&now);
-		int8_t twelvehour = curtm->tm_hour % 12;
+		uint8_t twelvehour = static_cast<uint8_t>(curtm->tm_hour) % 12;
 		if (twelvehour == 0)
 			twelvehour = 12;
 		bool pm = curtm->tm_hour >= 12;
-		qdiv_t tmp = qdiv(curtm->tm_min, 10);
+		divmod_t<uint8_t> tmp = divmod<uint8_t>(curtm->tm_min, 10);
 		writeDigit(RED, 0, 0, tmp.rem);
-		tmp = qdiv(tmp.quot, 10);
+		tmp = divmod<uint8_t>(tmp.quot, 10);
 		writeDigit(RED, 0, 1, tmp.rem);
 		writeDigit(RED, 0, 2, twelvehour % 10);
 		writeDigit(RED, 0, 3, (twelvehour / 10) % 10);
 		RED.assignLed(0, 1, !pm);
 		RED.assignLed(0, 30, pm);
 
-		int16_t year = curtm->tm_year + 1900;
-		div_t tmp2 = div(year, 10);
+		// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
+#ifdef FULL_YEAR_RANGE
+		uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
+#else
+		// doesn't even handle year 10k with only 4 digits, so ignore overflow
+		uint16_t year = curtm->tm_year + 1900;
+		if (static_cast<int16_t>(year) < 0)
+			year = -year;
+#endif
+		divmod_t<uint16_t> tmp2 = divmod<uint16_t>(year, 10);
 		writeDigit(RED, 1, 0, tmp2.rem);
-		tmp2 = div(tmp2.quot, 10);
+		tmp2 = divmod<uint16_t>(tmp2.quot, 10);
 		writeDigit(RED, 1, 1, tmp2.rem);
-		tmp2 = div(tmp2.quot, 10);
+		tmp2 = divmod<uint16_t>(tmp2.quot, 10);
 		writeDigit(RED, 1, 2, tmp2.rem);
-		tmp2 = div(tmp2.quot, 10);
+		tmp2 = divmod<uint16_t>(tmp2.quot, 10);
 		writeDigit(RED, 1, 3, tmp2.rem);
 
-		tmp = qdiv(curtm->tm_mday, 10);
+		tmp = divmod<uint8_t>(curtm->tm_mday, 10);
 		writeDigit(RED, 2, 0, tmp.rem);
-		tmp = qdiv(tmp.quot, 10);
+		tmp = divmod<uint8_t>(tmp.quot, 10);
 		writeDigit(RED, 2, 1, tmp.rem);
 		uint8_t colon = curtm->tm_sec & 1;
 		RED.assignLed(2,  1, colon);
