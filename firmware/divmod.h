@@ -8,15 +8,23 @@ struct divmod_t
 	T rem;
 };
 
+#if !defined(__ATTR_CONST__)
+# if defined(__GNUC__)
+#  define __ATTR_CONST__ __attribute__((__const__))
+# else
+#  define __ATTR_CONST__
+# endif
+#endif
+
 template<typename T>
-inline divmod_t<T> divmod(T __num, T __denom) __ATTR_CONST__;
+constexpr divmod_t<T> divmod(T __num, T __denom) __ATTR_CONST__;
 template<typename T>
-inline divmod_t<T> divmod(T __num, T __denom)
+constexpr divmod_t<T> divmod(T __num, T __denom)
 {
 	return {static_cast<T>(__num / __denom), static_cast<T>(__num % __denom)};
 }
 
-#if defined (__AVR__)
+#if defined (__AVR__) && defined (__GNUC__)
 #define DIVMOD_SPECIALIZATION(type, asmname) template<> \
 	divmod_t<type> divmod(type __num, type __denom) __asm__(#asmname) __ATTR_CONST__;
 
