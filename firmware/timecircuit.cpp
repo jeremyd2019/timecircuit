@@ -18,11 +18,106 @@ ISR(TIMER1_OVF_vect, ISR_NAKED)
 	reti();
 }
 
+template<uint8_t Rows, uint8_t Cols, bool ProgMem = false>
+class NibbleArray2D
+{
+public: // Would be private, but seems to screw up initializing member(s) with = {...}
+	struct ArrayMember
+	{
+		uint8_t a:4;
+		uint8_t b:4;
+	};
+
+	/* Returns the first integer greater or equal to num/denom */
+	static constexpr uint8_t integer_ceil_division(uint8_t num, uint8_t denom)
+	{
+		return (num > 0) ? (num - 1) / denom + 1 : 0;
+	}
+
+	ArrayMember m_array[integer_ceil_division(Rows*Cols,2)];
+
+public:
+	template<bool RowProgMem, uint8_t Garbage = 42>
+	class Row
+	{
+		typedef NibbleArray2D<Rows, Cols, RowProgMem> OuterClass;
+		friend Row<RowProgMem> OuterClass::operator[] (uint8_t) const;
+
+		const OuterClass * outer;
+		const uint8_t idx;
+
+		Row(const OuterClass * that, uint8_t idx)
+			: outer (that)
+			, idx (idx)
+		{ }
+
+	public:
+		inline uint8_t operator[] (uint8_t col) const
+		{
+			const uint8_t i = idx + col;
+			const ArrayMember & m = outer->m_array[i>>1];
+			return (i&1) ? m.b : m.a;
+		}
+	};
+
+	template<uint8_t Garbage>
+	class Row<true, Garbage>
+	{
+		typedef NibbleArray2D<Rows, Cols, true> OuterClass;
+		friend Row<true> OuterClass::operator[] (uint8_t) const;
+
+		const OuterClass * outer;
+		const uint8_t idx;
+
+		Row(const OuterClass * that, uint8_t idx)
+			: outer (that)
+			, idx (idx)
+		{ }
+
+	public:
+		inline uint8_t operator[] (uint8_t col) const
+		{
+			const uint8_t i = idx + col;
+			const union
+			{
+				uint8_t x;
+				ArrayMember m;
+			} x = {pgm_read_byte(&outer->m_array[i>>1])};
+			return (i&1) ? x.m.b : x.m.a;
+		}
+	};
+
+	inline Row<ProgMem> operator[] (uint8_t row) const
+	{
+		return Row<ProgMem>(this, row * Cols);
+	}
+};
+
+static const NibbleArray2D<5, 3, true> KEYMAPPING PROGMEM = {{
+	0x1, 0x2, 0x3,
+	0x4, 0x5, 0x6,
+	0x7, 0x8, 0x9,
+	0xD, 0x0, 0xE,
+	0xA, 0xB, 0xC,
+	0xF // to fill out the even number of elements
+}};
+
 MultiplexMM5450 RED(9), YELLOW(8), GREEN(7);
 
 HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70);
 
 extern const uint32_t PROGMEM INITIAL_TIME;
+
+static volatile bool polling = false;
+static volatile unsigned long lastPollMillis = 0;
+static void onPin3Rising()
+{
+	if (!polling)
+	{
+		lastPollMillis = millis();
+		polling = true;
+	}
+}
 
 void setup() {
 	// put your setup code here, to run once:
@@ -41,7 +136,10 @@ void setup() {
 	GREEN.initialize();
 	Wire.begin();
 	RED_MONTH.systemSetup(true);
+	RED_MONTH.rowIntSet(true, true);
 	RED_MONTH.dimmingSet(5);
+	pinMode(3, INPUT);
+	attachInterrupt(1, onPin3Rising, RISING);
 	// nice all-LEDs-on test pattern
 	RED_MONTH.writeDigitRaw(0, 0xFFFF);
 	RED_MONTH.writeDigitRaw(1, 0xFFFF);
@@ -78,6 +176,31 @@ void loop() {
 			if ((ch == '\r' || ch == '\n') && serial_input != 0)
 				set_system_time(serial_input - UNIX_OFFSET);
 			serial_input = 0;
+		}
+	}
+	if (polling && lastPollMillis + 25 < millis())
+	{
+		RED_MONTH.readKeys();
+		static HT16K33Display::KeyPosition lastKeyPressed = {0xF, 0xF};
+		HT16K33Display::KeyPosition keyPressed = RED_MONTH.firstKeySet();
+		bool change = (lastKeyPressed != keyPressed);
+		lastKeyPressed = keyPressed;
+		if (keyPressed.col != 0xF /*|| keyPressed.row != 0xF*/)
+		{
+			if (change)
+			{
+				Serial.print("Key pressed ");
+				Serial.print(keyPressed.row);
+				Serial.print(", ");
+				Serial.print(keyPressed.col);
+				Serial.print(" = ");
+				Serial.println(KEYMAPPING[keyPressed.row][keyPressed.col], 16);
+			}
+			lastPollMillis = millis();
+		}
+		else
+		{
+			polling = false;
 		}
 	}
 	static time_t last_now = (time_t)-1;
@@ -128,6 +251,7 @@ void loop() {
 		uint8_t colon = curtm->tm_sec & 1;
 		RED.assignLed(2,  1, colon);
 		RED.assignLed(2, 30, colon);
+		RED.assignLedRange(2, 25, 5, curtm->tm_sec & 0x1F);
 
 		static int8_t last_month = -1;
 		if (last_month != curtm->tm_mon)
