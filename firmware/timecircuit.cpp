@@ -358,6 +358,7 @@ void loop() {
 							memset(inputoverride, 0, sizeof(*inputoverride));
 						inputoverride = NULL;
 						RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
+						forceupdate = true;
 						break;
 					case 1:
 						inputoverride->month = (inputoverride->month / 10) * 10;
@@ -395,7 +396,6 @@ void loop() {
 					}
 					if (inputdigit > 0)
 						--inputdigit;
-					forceupdate = true;
 					break;
 				case 0xE:
 					// NOTE this is the only 'input validation', and then only because out-of-range months crash
