@@ -252,6 +252,7 @@ void loop() {
 	static TimeOverride redoverride = {0}, yellowoverride = {0}, greenoverride = {0};
 	static TimeOverride * inputoverride = NULL;
 	static uint8_t inputdigit = 0;
+	bool forceupdate = false;
 	if (polling && lastPollMillis + 25 < millis())
 	{
 		RED_MONTH.readKeys();
@@ -327,6 +328,7 @@ void loop() {
 					memset(inputoverride, 0, sizeof(*inputoverride));
 					inputoverride->override = 1;
 					RED.assignLedRange(2, 25, 5, 0x06);
+					forceupdate = true;
 					break;
 				case 0xB:
 					if (inputoverride != NULL)
@@ -336,6 +338,7 @@ void loop() {
 					memset(inputoverride, 0, sizeof(*inputoverride));
 					inputoverride->override = 1;
 					RED.assignLedRange(2, 25, 5, 0x05);
+					forceupdate = true;
 					break;
 				case 0xC:
 					if (inputoverride != NULL)
@@ -345,6 +348,7 @@ void loop() {
 					memset(inputoverride, 0, sizeof(*inputoverride));
 					inputoverride->override = 1;
 					RED.assignLedRange(2, 25, 5, 0x3);
+					forceupdate = true;
 					break;
 				case 0xD:
 					switch (inputdigit)
@@ -391,11 +395,13 @@ void loop() {
 					}
 					if (inputdigit > 0)
 						--inputdigit;
+					forceupdate = true;
 					break;
 				case 0xE:
 					inputoverride = NULL;
 					inputdigit = 0;
 					RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
+					forceupdate = true;
 					break;
 				}
 			}
@@ -410,7 +416,7 @@ void loop() {
 	static time_t last_now = (time_t)-1;
 	time_t now;
 	time(&now);
-	if (now != last_now)
+	if (forceupdate || now != last_now)
 	{
 		if (inputoverride == &redoverride)
 		{
