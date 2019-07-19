@@ -189,6 +189,9 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 	color.assignLed(0, 1, !pm);
 	color.assignLed(0, 30, pm);
 
+	// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
+	if (static_cast<int16_t>(year) < 0)
+		year = -year;
 	divmod_t<uint16_t> tmp2 = divmod<uint16_t>(year, 10);
 	writeDigit(color, 1, 0, tmp2.rem);
 	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
@@ -214,6 +217,20 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 		last_month = month;
 	}
 }
+
+static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month)
+{
+	color.assignLedRange(0, 2, 28, 0);
+	color.assignLedRange(1, 2, 28, 0);
+	color.assignLedRange(2, 10, 14, 0);
+	if (last_month != 254)
+	{
+		monthdisplay.clear();
+		monthdisplay.writeDisplay();
+		last_month = 254;
+	}
+}
+
 void loop() {
 	// put your main code here, to run repeatedly:
 	MultiplexMM5450::process({&RED, &YELLOW, &GREEN});
@@ -246,56 +263,56 @@ void loop() {
 		{
 			if (change)
 			{
+				uint8_t mappedKey = KEYMAPPING[keyPressed.row][keyPressed.col];
 				Serial.print("Key pressed ");
 				Serial.print(keyPressed.row);
 				Serial.print(", ");
 				Serial.print(keyPressed.col);
 				Serial.print(" = ");
-				Serial.println(KEYMAPPING[keyPressed.row][keyPressed.col], 16);
-				switch (KEYMAPPING[keyPressed.row][keyPressed.col])
+				Serial.println(mappedKey, 16);
+				switch (mappedKey)
 				{
 				// GCC extension
 				case 0 ... 9:
 					if (inputoverride != NULL)
 					{
-						uint8_t digit = KEYMAPPING[keyPressed.row][keyPressed.col];
 						switch (inputdigit)
 						{
 						case 0:
-							inputoverride->month = digit * 10;
+							inputoverride->month = mappedKey * 10;
 							break;
 						case 1:
-							inputoverride->month += digit;
+							inputoverride->month += mappedKey;
 							break;
 						case 2:
-							inputoverride->day = digit * 10;
+							inputoverride->day = mappedKey * 10;
 							break;
 						case 3:
-							inputoverride->day += digit;
+							inputoverride->day += mappedKey;
 							break;
 						case 4:
-							inputoverride->year = digit * 1000;
+							inputoverride->year = mappedKey * 1000;
 							break;
 						case 5:
-							inputoverride->year += digit * 100;
+							inputoverride->year += mappedKey * 100;
 							break;
 						case 6:
-							inputoverride->year += digit * 10;
+							inputoverride->year += mappedKey * 10;
 							break;
 						case 7:
-							inputoverride->year += digit;
+							inputoverride->year += mappedKey;
 							break;
 						case 8:
-							inputoverride->hour = digit * 10;
+							inputoverride->hour = mappedKey * 10;
 							break;
 						case 9:
-							inputoverride->hour += digit;
+							inputoverride->hour += mappedKey;
 							break;
 						case 10:
-							inputoverride->minute = digit * 10;
+							inputoverride->minute = mappedKey * 10;
 							break;
 						case 11:
-							inputoverride->minute += digit;
+							inputoverride->minute += mappedKey;
 							break;
 						}
 						if (inputdigit < 12)
@@ -397,46 +414,28 @@ void loop() {
 	{
 		if (inputoverride == &redoverride)
 		{
-			RED.assignLedRange(0, 2, 28, 0);
-			RED.assignLedRange(1, 2, 28, 0);
-			RED.assignLedRange(2, 10, 14, 0);
-			if (red_last_month != 13)
-			{
-				RED_MONTH.clear();
-				RED_MONTH.writeDisplay();
-				red_last_month = 13;
-			}
+			clearDisplay(RED, RED_MONTH, red_last_month);
 		}
 		else if (redoverride.override)
 		{
 			writeTime(RED, RED_MONTH, red_last_month, redoverride.year, redoverride.month-1, redoverride.day, redoverride.hour, redoverride.minute);
 		}
+		// TODO current time should be on GREEN, not RED, but I only built RED...
 		else
 		{
 			struct tm * curtm = localtime(&now);
-			// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
 #ifdef FULL_YEAR_RANGE
 			uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
 #else
 			// doesn't even handle year 10k with only 4 digits, so ignore overflow
 			uint16_t year = curtm->tm_year + 1900;
-			if (static_cast<int16_t>(year) < 0)
-				year = -year;
 #endif
 			writeTime(RED, RED_MONTH, red_last_month, year, curtm->tm_mon, curtm->tm_mday, curtm->tm_hour, curtm->tm_min);
 		}
 
 		if (inputoverride == &yellowoverride)
 		{
-			YELLOW.assignLedRange(0, 2, 28, 0);
-			YELLOW.assignLedRange(1, 2, 28, 0);
-			YELLOW.assignLedRange(2, 10, 14, 0);
-			if (yellow_last_month != 13)
-			{
-				YELLOW_MONTH.clear();
-				YELLOW_MONTH.writeDisplay();
-				yellow_last_month = 13;
-			}
+			clearDisplay(YELLOW, YELLOW_MONTH, yellow_last_month);
 		}
 		else if (yellowoverride.override)
 		{
@@ -445,15 +444,7 @@ void loop() {
 
 		if (inputoverride == &greenoverride)
 		{
-			GREEN.assignLedRange(0, 2, 28, 0);
-			GREEN.assignLedRange(1, 2, 28, 0);
-			GREEN.assignLedRange(2, 10, 14, 0);
-			if (green_last_month != 13)
-			{
-				GREEN_MONTH.clear();
-				GREEN_MONTH.writeDisplay();
-				green_last_month = 13;
-			}
+			clearDisplay(GREEN, GREEN_MONTH, green_last_month);
 		}
 		else if (greenoverride.override)
 		{
