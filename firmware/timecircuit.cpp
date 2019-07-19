@@ -105,6 +105,8 @@ static const NibbleArray2D<5, 3, true> KEYMAPPING PROGMEM = {{
 MultiplexMM5450 RED(9), YELLOW(8), GREEN(7);
 
 HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70);
+HT16K33QuadAlphanum YELLOW_MONTH = HT16K33QuadAlphanum(0x71);
+HT16K33QuadAlphanum GREEN_MONTH = HT16K33QuadAlphanum(0x72);
 
 extern const uint32_t PROGMEM INITIAL_TIME;
 
@@ -119,6 +121,21 @@ static void onPin3Rising()
 	}
 }
 
+static void setupDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay)
+{
+	color.initialize();
+	monthdisplay.systemSetup(true);
+	monthdisplay.rowIntSet(true, true);
+	monthdisplay.dimmingSet(5);
+	// nice all-LEDs-on test pattern
+	for (uint8_t i = 0; i < 4; ++i)
+		monthdisplay.writeDigitRaw(i, 0xFFFF);
+	for (uint8_t i = 0; i < 3; ++i)
+		color.assignLedRange(i, 1, 30, 0x3FFFFFFF);
+	monthdisplay.writeDisplay();
+	monthdisplay.displaySetup(true);
+}
+
 void setup() {
 	// put your setup code here, to run once:
 	// enable timer 1 to fire an interrupt once per second
@@ -131,25 +148,12 @@ void setup() {
 	set_dst(usa_dst);
 	set_system_time(pgm_read_dword(&INITIAL_TIME));
 	SPI.begin();
-	RED.initialize();
-	YELLOW.initialize();
-	GREEN.initialize();
 	Wire.begin();
-	RED_MONTH.systemSetup(true);
-	RED_MONTH.rowIntSet(true, true);
-	RED_MONTH.dimmingSet(5);
 	pinMode(3, INPUT);
 	attachInterrupt(1, onPin3Rising, RISING);
-	// nice all-LEDs-on test pattern
-	RED_MONTH.writeDigitRaw(0, 0xFFFF);
-	RED_MONTH.writeDigitRaw(1, 0xFFFF);
-	RED_MONTH.writeDigitRaw(2, 0xFFFF);
-	RED_MONTH.writeDigitRaw(3, 0xFFFF);
-	RED_MONTH.writeDisplay();
-	RED_MONTH.displaySetup(true);
-	RED.assignLedRange(0, 1, 30, 0x3FFFFFFF);
-	RED.assignLedRange(1, 1, 30, 0x3FFFFFFF);
-	RED.assignLedRange(2, 1, 30, 0x3FFFFFFF);
+	setupDisplay(RED, RED_MONTH);
+	setupDisplay(YELLOW, YELLOW_MONTH);
+	setupDisplay(GREEN, GREEN_MONTH);
 	Serial.begin(115200);
 }
 
@@ -160,6 +164,56 @@ static const char MONTHS[12][3] PROGMEM = {
 	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
 };
 
+struct TimeOverride
+{
+	int16_t year;
+	uint16_t override:1;
+	uint16_t month:4;
+	uint16_t day:5;
+	uint16_t hour:5;
+	uint8_t minute:6;
+};
+
+static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
+{
+	uint8_t twelvehour = hour % 12;
+	if (twelvehour == 0)
+		twelvehour = 12;
+	bool pm = hour >= 12;
+	divmod_t<uint8_t> tmp = divmod<uint8_t>(minute, 10);
+	writeDigit(color, 0, 0, tmp.rem);
+	tmp = divmod<uint8_t>(tmp.quot, 10);
+	writeDigit(color, 0, 1, tmp.rem);
+	writeDigit(color, 0, 2, twelvehour % 10);
+	writeDigit(color, 0, 3, (twelvehour / 10) % 10);
+	color.assignLed(0, 1, !pm);
+	color.assignLed(0, 30, pm);
+
+	divmod_t<uint16_t> tmp2 = divmod<uint16_t>(year, 10);
+	writeDigit(color, 1, 0, tmp2.rem);
+	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
+	writeDigit(color, 1, 1, tmp2.rem);
+	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
+	writeDigit(color, 1, 2, tmp2.rem);
+	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
+	writeDigit(color, 1, 3, tmp2.rem);
+
+	tmp = divmod<uint8_t>(day, 10);
+	writeDigit(color, 2, 0, tmp.rem);
+	tmp = divmod<uint8_t>(tmp.quot, 10);
+	writeDigit(color, 2, 1, tmp.rem);
+
+	if (last_month != month)
+	{
+		const char * monthabbr = MONTHS[month];
+		monthdisplay.writeDigitRaw(0, 0x0);
+		monthdisplay.writeDigitAscii(1, pgm_read_byte(&monthabbr[0]));
+		monthdisplay.writeDigitAscii(2, pgm_read_byte(&monthabbr[1]));
+		monthdisplay.writeDigitAscii(3, pgm_read_byte(&monthabbr[2]));
+		monthdisplay.writeDisplay();
+		last_month = month;
+	}
+}
 void loop() {
 	// put your main code here, to run repeatedly:
 	MultiplexMM5450::process({&RED, &YELLOW, &GREEN});
@@ -178,6 +232,9 @@ void loop() {
 			serial_input = 0;
 		}
 	}
+	static TimeOverride redoverride = {0}, yellowoverride = {0}, greenoverride = {0};
+	static TimeOverride * inputoverride = NULL;
+	static uint8_t inputdigit = 0;
 	if (polling && lastPollMillis + 25 < millis())
 	{
 		RED_MONTH.readKeys();
@@ -195,6 +252,135 @@ void loop() {
 				Serial.print(keyPressed.col);
 				Serial.print(" = ");
 				Serial.println(KEYMAPPING[keyPressed.row][keyPressed.col], 16);
+				switch (KEYMAPPING[keyPressed.row][keyPressed.col])
+				{
+				// GCC extension
+				case 0 ... 9:
+					if (inputoverride != NULL)
+					{
+						uint8_t digit = KEYMAPPING[keyPressed.row][keyPressed.col];
+						switch (inputdigit)
+						{
+						case 0:
+							inputoverride->month = digit * 10;
+							break;
+						case 1:
+							inputoverride->month += digit;
+							break;
+						case 2:
+							inputoverride->day = digit * 10;
+							break;
+						case 3:
+							inputoverride->day += digit;
+							break;
+						case 4:
+							inputoverride->year = digit * 1000;
+							break;
+						case 5:
+							inputoverride->year += digit * 100;
+							break;
+						case 6:
+							inputoverride->year += digit * 10;
+							break;
+						case 7:
+							inputoverride->year += digit;
+							break;
+						case 8:
+							inputoverride->hour = digit * 10;
+							break;
+						case 9:
+							inputoverride->hour += digit;
+							break;
+						case 10:
+							inputoverride->minute = digit * 10;
+							break;
+						case 11:
+							inputoverride->minute += digit;
+							break;
+						}
+						if (inputdigit < 12)
+							++inputdigit;
+					}
+					break;
+				case 0xA:
+					if (inputoverride != NULL)
+						memset(inputoverride, 0, sizeof(*inputoverride));
+					inputdigit = 0;
+					inputoverride = &redoverride;
+					memset(inputoverride, 0, sizeof(*inputoverride));
+					inputoverride->override = 1;
+					RED.assignLedRange(2, 25, 5, 0x06);
+					break;
+				case 0xB:
+					if (inputoverride != NULL)
+						memset(inputoverride, 0, sizeof(*inputoverride));
+					inputdigit = 0;
+					inputoverride = &yellowoverride;
+					memset(inputoverride, 0, sizeof(*inputoverride));
+					inputoverride->override = 1;
+					RED.assignLedRange(2, 25, 5, 0x05);
+					break;
+				case 0xC:
+					if (inputoverride != NULL)
+						memset(inputoverride, 0, sizeof(*inputoverride));
+					inputdigit = 0;
+					inputoverride = &greenoverride;
+					memset(inputoverride, 0, sizeof(*inputoverride));
+					inputoverride->override = 1;
+					RED.assignLedRange(2, 25, 5, 0x3);
+					break;
+				case 0xD:
+					switch (inputdigit)
+					{
+					case 0:
+						if (inputoverride)
+							memset(inputoverride, 0, sizeof(*inputoverride));
+						inputoverride = NULL;
+						RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
+						break;
+					case 1:
+						inputoverride->month = (inputoverride->month / 10) * 10;
+						break;
+					case 2:
+						inputoverride->day = 0;
+						break;
+					case 3:
+						inputoverride->day = (inputoverride->day / 10) * 10;
+						break;
+					case 4:
+						inputoverride->year = 0;
+						break;
+					case 5:
+						inputoverride->year = (inputoverride->year / 1000) * 1000;
+						break;
+					case 6:
+						inputoverride->year = (inputoverride->year / 100) * 100;
+						break;
+					case 7:
+						inputoverride->year = (inputoverride->year / 10) * 10;
+						break;
+					case 8:
+						inputoverride->hour = 0;
+						break;
+					case 9:
+						inputoverride->hour = (inputoverride->hour / 10) * 10;
+						break;
+					case 10:
+						inputoverride->minute = 0;
+						break;
+					case 11:
+						inputoverride->minute = (inputoverride->minute / 10) * 10;
+						break;
+					}
+					if (inputdigit > 0)
+						--inputdigit;
+					break;
+				case 0xE:
+					inputoverride = NULL;
+					inputdigit = 0;
+					RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
+					break;
+				}
 			}
 			lastPollMillis = millis();
 		}
@@ -203,68 +389,83 @@ void loop() {
 			polling = false;
 		}
 	}
+	static uint8_t red_last_month = -1, yellow_last_month = -1, green_last_month = -1;
 	static time_t last_now = (time_t)-1;
 	time_t now;
 	time(&now);
 	if (now != last_now)
 	{
-		RED.assignLed(0, 31, now & 1);
-		RED.assignLed(1, 31, now & 2);
-		RED.assignLed(2, 31, now & 4);
-
-		struct tm * curtm = localtime(&now);
-		uint8_t twelvehour = static_cast<uint8_t>(curtm->tm_hour) % 12;
-		if (twelvehour == 0)
-			twelvehour = 12;
-		bool pm = curtm->tm_hour >= 12;
-		divmod_t<uint8_t> tmp = divmod<uint8_t>(curtm->tm_min, 10);
-		writeDigit(RED, 0, 0, tmp.rem);
-		tmp = divmod<uint8_t>(tmp.quot, 10);
-		writeDigit(RED, 0, 1, tmp.rem);
-		writeDigit(RED, 0, 2, twelvehour % 10);
-		writeDigit(RED, 0, 3, (twelvehour / 10) % 10);
-		RED.assignLed(0, 1, !pm);
-		RED.assignLed(0, 30, pm);
-
-		// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
-#ifdef FULL_YEAR_RANGE
-		uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
-#else
-		// doesn't even handle year 10k with only 4 digits, so ignore overflow
-		uint16_t year = curtm->tm_year + 1900;
-		if (static_cast<int16_t>(year) < 0)
-			year = -year;
-#endif
-		divmod_t<uint16_t> tmp2 = divmod<uint16_t>(year, 10);
-		writeDigit(RED, 1, 0, tmp2.rem);
-		tmp2 = divmod<uint16_t>(tmp2.quot, 10);
-		writeDigit(RED, 1, 1, tmp2.rem);
-		tmp2 = divmod<uint16_t>(tmp2.quot, 10);
-		writeDigit(RED, 1, 2, tmp2.rem);
-		tmp2 = divmod<uint16_t>(tmp2.quot, 10);
-		writeDigit(RED, 1, 3, tmp2.rem);
-
-		tmp = divmod<uint8_t>(curtm->tm_mday, 10);
-		writeDigit(RED, 2, 0, tmp.rem);
-		tmp = divmod<uint8_t>(tmp.quot, 10);
-		writeDigit(RED, 2, 1, tmp.rem);
-		uint8_t colon = curtm->tm_sec & 1;
-		RED.assignLed(2,  1, colon);
-		RED.assignLed(2, 30, colon);
-		RED.assignLedRange(2, 25, 5, curtm->tm_sec & 0x1F);
-
-		static int8_t last_month = -1;
-		if (last_month != curtm->tm_mon)
+		if (inputoverride == &redoverride)
 		{
-			const char * monthabbr = MONTHS[curtm->tm_mon];
-			RED_MONTH.writeDigitRaw(0, 0x0);
-			RED_MONTH.writeDigitAscii(1, pgm_read_byte(&monthabbr[0]));
-			RED_MONTH.writeDigitAscii(2, pgm_read_byte(&monthabbr[1]));
-			RED_MONTH.writeDigitAscii(3, pgm_read_byte(&monthabbr[2]));
-			RED_MONTH.writeDisplay();
-			last_month = curtm->tm_mon;
+			RED.assignLedRange(0, 2, 28, 0);
+			RED.assignLedRange(1, 2, 28, 0);
+			RED.assignLedRange(2, 10, 14, 0);
+			if (red_last_month != 13)
+			{
+				RED_MONTH.clear();
+				RED_MONTH.writeDisplay();
+				red_last_month = 13;
+			}
+		}
+		else if (redoverride.override)
+		{
+			writeTime(RED, RED_MONTH, red_last_month, redoverride.year, redoverride.month-1, redoverride.day, redoverride.hour, redoverride.minute);
+		}
+		else
+		{
+			struct tm * curtm = localtime(&now);
+			// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
+#ifdef FULL_YEAR_RANGE
+			uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
+#else
+			// doesn't even handle year 10k with only 4 digits, so ignore overflow
+			uint16_t year = curtm->tm_year + 1900;
+			if (static_cast<int16_t>(year) < 0)
+				year = -year;
+#endif
+			writeTime(RED, RED_MONTH, red_last_month, year, curtm->tm_mon, curtm->tm_mday, curtm->tm_hour, curtm->tm_min);
 		}
 
+		if (inputoverride == &yellowoverride)
+		{
+			YELLOW.assignLedRange(0, 2, 28, 0);
+			YELLOW.assignLedRange(1, 2, 28, 0);
+			YELLOW.assignLedRange(2, 10, 14, 0);
+			if (yellow_last_month != 13)
+			{
+				YELLOW_MONTH.clear();
+				YELLOW_MONTH.writeDisplay();
+				yellow_last_month = 13;
+			}
+		}
+		else if (yellowoverride.override)
+		{
+			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowoverride.year, yellowoverride.month-1, yellowoverride.day, yellowoverride.hour, yellowoverride.minute);
+		}
+
+		if (inputoverride == &greenoverride)
+		{
+			GREEN.assignLedRange(0, 2, 28, 0);
+			GREEN.assignLedRange(1, 2, 28, 0);
+			GREEN.assignLedRange(2, 10, 14, 0);
+			if (green_last_month != 13)
+			{
+				GREEN_MONTH.clear();
+				GREEN_MONTH.writeDisplay();
+				green_last_month = 13;
+			}
+		}
+		else if (greenoverride.override)
+		{
+			writeTime(GREEN, GREEN_MONTH, green_last_month, greenoverride.year, greenoverride.month-1, greenoverride.day, greenoverride.hour, greenoverride.minute);
+		}
+		uint8_t colon = now & 1;
+		RED.assignLed(2,  1, colon);
+		RED.assignLed(2, 30, colon);
+		YELLOW.assignLed(2,  1, colon);
+		YELLOW.assignLed(2, 30, colon);
+		GREEN.assignLed(2,  1, colon);
+		GREEN.assignLed(2, 30, colon);
 		last_now = now;
 	}
 }
