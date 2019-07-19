@@ -220,7 +220,7 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 
 static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month)
 {
-	color.assignLedRange(0, 2, 28, 0);
+	color.assignLedRange(0, 1, 30, 0);
 	color.assignLedRange(1, 2, 28, 0);
 	color.assignLedRange(2, 10, 14, 0);
 	if (last_month != 254)
