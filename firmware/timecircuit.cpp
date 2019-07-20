@@ -12,7 +12,7 @@
 #include "seven_seg.h"
 #include "fourteen_seg.h"
 
-#include "nibblearray2d.h"
+#include "subbytearray.h"
 
 ISR(TIMER1_OVF_vect, ISR_NAKED)
 {
@@ -20,7 +20,12 @@ ISR(TIMER1_OVF_vect, ISR_NAKED)
 	reti();
 }
 
-static const NibbleArray2D<uint8_t, 5, 3, true> KEYMAPPING PROGMEM = {{
+static inline uint8_t pgm_read_byte_func(const void * p)
+{
+	return pgm_read_byte(p);
+}
+
+static const SubByteArray2D<4, uint8_t, 5, 3, pgm_read_byte_func> KEYMAPPING PROGMEM = {{
 	0x1, 0x2, 0x3,
 	0x4, 0x5, 0x6,
 	0x7, 0x8, 0x9,
