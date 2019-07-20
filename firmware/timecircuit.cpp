@@ -12,88 +12,15 @@
 #include "seven_seg.h"
 #include "fourteen_seg.h"
 
+#include "nibblearray2d.h"
+
 ISR(TIMER1_OVF_vect, ISR_NAKED)
 {
 	system_tick();
 	reti();
 }
 
-template<uint8_t Rows, uint8_t Cols, bool ProgMem = false>
-class NibbleArray2D
-{
-public: // Would be private, but seems to screw up initializing member(s) with = {...}
-	struct ArrayMember
-	{
-		uint8_t a:4;
-		uint8_t b:4;
-	};
-
-	/* Returns the first integer greater or equal to num/denom */
-	static constexpr uint8_t integer_ceil_division(uint8_t num, uint8_t denom)
-	{
-		return (num > 0) ? (num - 1) / denom + 1 : 0;
-	}
-
-	ArrayMember m_array[integer_ceil_division(Rows*Cols,2)];
-
-public:
-	template<bool RowProgMem, uint8_t Garbage = 42>
-	class Row
-	{
-		typedef NibbleArray2D<Rows, Cols, RowProgMem> OuterClass;
-		friend Row<RowProgMem> OuterClass::operator[] (uint8_t) const;
-
-		const OuterClass * outer;
-		const uint8_t idx;
-
-		Row(const OuterClass * that, uint8_t idx)
-			: outer (that)
-			, idx (idx)
-		{ }
-
-	public:
-		inline uint8_t operator[] (uint8_t col) const
-		{
-			const uint8_t i = idx + col;
-			const ArrayMember & m = outer->m_array[i>>1];
-			return (i&1) ? m.b : m.a;
-		}
-	};
-
-	template<uint8_t Garbage>
-	class Row<true, Garbage>
-	{
-		typedef NibbleArray2D<Rows, Cols, true> OuterClass;
-		friend Row<true> OuterClass::operator[] (uint8_t) const;
-
-		const OuterClass * outer;
-		const uint8_t idx;
-
-		Row(const OuterClass * that, uint8_t idx)
-			: outer (that)
-			, idx (idx)
-		{ }
-
-	public:
-		inline uint8_t operator[] (uint8_t col) const
-		{
-			const uint8_t i = idx + col;
-			const union
-			{
-				uint8_t x;
-				ArrayMember m;
-			} x = {pgm_read_byte(&outer->m_array[i>>1])};
-			return (i&1) ? x.m.b : x.m.a;
-		}
-	};
-
-	inline Row<ProgMem> operator[] (uint8_t row) const
-	{
-		return Row<ProgMem>(this, row * Cols);
-	}
-};
-
-static const NibbleArray2D<5, 3, true> KEYMAPPING PROGMEM = {{
+static const NibbleArray2D<uint8_t, 5, 3, true> KEYMAPPING PROGMEM = {{
 	0x1, 0x2, 0x3,
 	0x4, 0x5, 0x6,
 	0x7, 0x8, 0x9,
