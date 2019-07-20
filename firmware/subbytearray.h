@@ -36,7 +36,9 @@ public: // Would be private, but seems to screw up initializing member(s) with =
     class MemberReader
     {
         typedef SubByteArray<1, SizeType, Elts, _ReadFunc> OuterClass;
-    public:
+        friend class OuterClass::ElementRef;
+        friend uint8_t OuterClass::operator[] (SizeType) const;
+
         static inline uint8_t read_member(const OuterClass * outer, SizeType i)
         {
             const union
@@ -71,7 +73,9 @@ public: // Would be private, but seems to screw up initializing member(s) with =
     class MemberReader<nullptr, Garbage>
     {
         typedef SubByteArray<1, SizeType, Elts, nullptr> OuterClass;
-    public:
+        friend class OuterClass::ElementRef;
+        friend uint8_t OuterClass::operator[] (SizeType) const;
+
         static inline uint8_t read_member(const OuterClass * outer, SizeType i)
         {
             const ArrayMember & m = outer->m_array[i>>3];
@@ -107,12 +111,13 @@ public:
         friend ElementRef OuterClass::operator[] (SizeType);
         OuterClass * outer;
         SizeType i;
-    public:
+
         inline ElementRef(OuterClass * outer, SizeType i)
             : outer (outer)
             , i (i)
         { }
 
+    public:
         inline ElementRef & operator= (const uint8_t & rhs)
         {
             ArrayMember & m = outer->m_array[i>>3];
@@ -179,7 +184,9 @@ public: // Would be private, but seems to screw up initializing member(s) with =
     class MemberReader
     {
         typedef SubByteArray<2, SizeType, Elts, _ReadFunc> OuterClass;
-    public:
+        friend class OuterClass::ElementRef;
+        friend uint8_t OuterClass::operator[] (SizeType) const;
+
         static inline uint8_t read_member(const OuterClass * outer, SizeType i)
         {
             const union
@@ -206,7 +213,9 @@ public: // Would be private, but seems to screw up initializing member(s) with =
     class MemberReader<nullptr, Garbage>
     {
         typedef SubByteArray<2, SizeType, Elts, nullptr> OuterClass;
-    public:
+        friend class OuterClass::ElementRef;
+        friend uint8_t OuterClass::operator[] (SizeType) const;
+
         static inline uint8_t read_member(const OuterClass * outer, SizeType i)
         {
             const ArrayMember & m = outer->m_array[i>>2];
@@ -234,12 +243,13 @@ public:
         friend ElementRef OuterClass::operator[] (SizeType);
         OuterClass * outer;
         SizeType i;
-    public:
+
         inline ElementRef(OuterClass * outer, SizeType i)
             : outer (outer)
             , i (i)
         { }
 
+    public:
         inline ElementRef & operator= (const uint8_t & rhs)
         {
             ArrayMember & m = outer->m_array[i>>2];
@@ -292,7 +302,9 @@ public: // Would be private, but seems to screw up initializing member(s) with =
     class MemberReader
     {
         typedef SubByteArray<4, SizeType, Elts, _ReadFunc> OuterClass;
-    public:
+        friend class OuterClass::ElementRef;
+        friend uint8_t OuterClass::operator[] (SizeType) const;
+
         static inline uint8_t read_member(const OuterClass * outer, SizeType i)
         {
             const union
@@ -308,7 +320,9 @@ public: // Would be private, but seems to screw up initializing member(s) with =
     class MemberReader<nullptr, Garbage>
     {
         typedef SubByteArray<4, SizeType, Elts, nullptr> OuterClass;
-    public:
+        friend class OuterClass::ElementRef;
+        friend uint8_t OuterClass::operator[] (SizeType) const;
+
         static inline uint8_t read_member(const OuterClass * outer, SizeType i)
         {
             const ArrayMember & m = outer->m_array[i>>1];
@@ -325,12 +339,13 @@ public:
         friend ElementRef OuterClass::operator[] (SizeType);
         OuterClass * outer;
         SizeType i;
-    public:
+
         inline ElementRef(OuterClass * outer, SizeType i)
             : outer (outer)
             , i (i)
         { }
 
+    public:
         inline ElementRef & operator= (const uint8_t & rhs)
         {
             ArrayMember & m = outer->m_array[i>>1];
