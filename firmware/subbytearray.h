@@ -102,7 +102,7 @@ public: // Would be private, but seems to screw up initializing member(s) with =
         }
     };
 
-    ArrayMember m_array[SubByteArray<99, SizeType, 1>::integer_ceil_division(Elts,8/1)];
+    ArrayMember m_array[SubByteArray<0, SizeType, 1>::integer_ceil_division(Elts,8/1)];
 
 public:
     class ElementRef
@@ -234,7 +234,7 @@ public: // Would be private, but seems to screw up initializing member(s) with =
         }
     };
 
-    ArrayMember m_array[SubByteArray<99, SizeType, 1>::integer_ceil_division(Elts,8/2)];
+    ArrayMember m_array[SubByteArray<0, SizeType, 1>::integer_ceil_division(Elts,8/2)];
 
 public:
     class ElementRef
@@ -330,7 +330,7 @@ public: // Would be private, but seems to screw up initializing member(s) with =
         }
     };
 
-    ArrayMember m_array[SubByteArray<99, SizeType, 1>::integer_ceil_division(Elts,8/4)];
+    ArrayMember m_array[SubByteArray<0, SizeType, 1>::integer_ceil_division(Elts,8/4)];
 
 public:
     class ElementRef
