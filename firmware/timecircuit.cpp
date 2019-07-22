@@ -40,6 +40,9 @@ HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70);
 HT16K33QuadAlphanum YELLOW_MONTH = HT16K33QuadAlphanum(0x71);
 HT16K33QuadAlphanum GREEN_MONTH = HT16K33QuadAlphanum(0x72);
 
+// TODO current time should be on GREEN, not RED, but I only built RED...
+#define CURRENT_TIME_ON_RED
+
 extern const uint32_t PROGMEM INITIAL_TIME;
 
 static volatile bool polling = false;
@@ -361,7 +364,7 @@ void loop() {
 		{
 			writeTime(RED, RED_MONTH, red_last_month, redoverride.year, redoverride.month-1, redoverride.day, redoverride.hour, redoverride.minute);
 		}
-		// TODO current time should be on GREEN, not RED, but I only built RED...
+#ifdef CURRENT_TIME_ON_RED
 		else
 		{
 			struct tm * curtm = localtime(&now);
@@ -373,6 +376,7 @@ void loop() {
 #endif
 			writeTime(RED, RED_MONTH, red_last_month, year, curtm->tm_mon, curtm->tm_mday, curtm->tm_hour, curtm->tm_min);
 		}
+#endif
 
 		if (inputoverride == &yellowoverride)
 		{
@@ -391,6 +395,20 @@ void loop() {
 		{
 			writeTime(GREEN, GREEN_MONTH, green_last_month, greenoverride.year, greenoverride.month-1, greenoverride.day, greenoverride.hour, greenoverride.minute);
 		}
+#ifndef CURRENT_TIME_ON_RED
+		else
+		{
+			struct tm * curtm = localtime(&now);
+#ifdef FULL_YEAR_RANGE
+			uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
+#else
+			// doesn't even handle year 10k with only 4 digits, so ignore overflow
+			uint16_t year = curtm->tm_year + 1900;
+#endif
+			writeTime(GREEN, GREEN_MONTH, green_last_month, year, curtm->tm_mon, curtm->tm_mday, curtm->tm_hour, curtm->tm_min);
+		}
+#endif
+
 		uint8_t colon = now & 1;
 		RED.assignLed(2,  1, colon);
 		RED.assignLed(2, 30, colon);
