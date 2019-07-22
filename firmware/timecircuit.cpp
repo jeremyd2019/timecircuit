@@ -184,6 +184,7 @@ void loop() {
 			serial_input = 0;
 		}
 	}
+	static SubByteArray<4, uint8_t, 12> inputbuffer = {0};
 	static TimeOverride redoverride = {0}, yellowoverride = {0}, greenoverride = {0};
 	static TimeOverride * inputoverride = NULL;
 	static uint8_t inputdigit = 0;
@@ -210,55 +211,14 @@ void loop() {
 				{
 				// GCC extension
 				case 0 ... 9:
-					if (inputoverride != NULL)
-					{
-						switch (inputdigit)
-						{
-						case 0:
-							inputoverride->month = mappedKey * 10;
-							break;
-						case 1:
-							inputoverride->month += mappedKey;
-							break;
-						case 2:
-							inputoverride->day = mappedKey * 10;
-							break;
-						case 3:
-							inputoverride->day += mappedKey;
-							break;
-						case 4:
-							inputoverride->year = mappedKey * 1000;
-							break;
-						case 5:
-							inputoverride->year += mappedKey * 100;
-							break;
-						case 6:
-							inputoverride->year += mappedKey * 10;
-							break;
-						case 7:
-							inputoverride->year += mappedKey;
-							break;
-						case 8:
-							inputoverride->hour = mappedKey * 10;
-							break;
-						case 9:
-							inputoverride->hour += mappedKey;
-							break;
-						case 10:
-							inputoverride->minute = mappedKey * 10;
-							break;
-						case 11:
-							inputoverride->minute += mappedKey;
-							break;
-						}
-						if (inputdigit < 12)
-							++inputdigit;
-					}
+					if (inputoverride != NULL && inputdigit < 12)
+						inputbuffer[inputdigit++] = mappedKey;
 					break;
 				case 0xA:
 					if (inputoverride != NULL)
 						memset(inputoverride, 0, sizeof(*inputoverride));
 					inputdigit = 0;
+					memset (&inputbuffer, 0, sizeof(inputbuffer));
 					inputoverride = &redoverride;
 					memset(inputoverride, 0, sizeof(*inputoverride));
 					inputoverride->override = 1;
@@ -269,6 +229,7 @@ void loop() {
 					if (inputoverride != NULL)
 						memset(inputoverride, 0, sizeof(*inputoverride));
 					inputdigit = 0;
+					memset (&inputbuffer, 0, sizeof(inputbuffer));
 					inputoverride = &yellowoverride;
 					memset(inputoverride, 0, sizeof(*inputoverride));
 					inputoverride->override = 1;
@@ -279,6 +240,7 @@ void loop() {
 					if (inputoverride != NULL)
 						memset(inputoverride, 0, sizeof(*inputoverride));
 					inputdigit = 0;
+					memset (&inputbuffer, 0, sizeof(inputbuffer));
 					inputoverride = &greenoverride;
 					memset(inputoverride, 0, sizeof(*inputoverride));
 					inputoverride->override = 1;
@@ -286,58 +248,32 @@ void loop() {
 					forceupdate = true;
 					break;
 				case 0xD:
-					switch (inputdigit)
+					if (inputdigit == 0)
 					{
-					case 0:
 						if (inputoverride != NULL)
 							memset(inputoverride, 0, sizeof(*inputoverride));
 						inputoverride = NULL;
 						RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
 						forceupdate = true;
-						break;
-					case 1:
-						inputoverride->month = (inputoverride->month / 10) * 10;
-						break;
-					case 2:
-						inputoverride->day = 0;
-						break;
-					case 3:
-						inputoverride->day = (inputoverride->day / 10) * 10;
-						break;
-					case 4:
-						inputoverride->year = 0;
-						break;
-					case 5:
-						inputoverride->year = (inputoverride->year / 1000) * 1000;
-						break;
-					case 6:
-						inputoverride->year = (inputoverride->year / 100) * 100;
-						break;
-					case 7:
-						inputoverride->year = (inputoverride->year / 10) * 10;
-						break;
-					case 8:
-						inputoverride->hour = 0;
-						break;
-					case 9:
-						inputoverride->hour = (inputoverride->hour / 10) * 10;
-						break;
-					case 10:
-						inputoverride->minute = 0;
-						break;
-					case 11:
-						inputoverride->minute = (inputoverride->minute / 10) * 10;
-						break;
 					}
-					if (inputdigit > 0)
-						--inputdigit;
+					else
+					{
+						inputbuffer[--inputdigit] = 0;
+					}
 					break;
 				case 0xE:
-					// NOTE this is the only 'input validation', and then only because out-of-range months crash
 					if (inputoverride != NULL)
-						inputoverride->month = static_cast<uint8_t>(inputoverride->month - 1) % 12 + 1;
+					{
+						// NOTE this is the only 'input validation', and then only because out-of-range months crash
+						inputoverride->month = static_cast<uint8_t>(inputbuffer[0] * 10 + inputbuffer[1] - 1) % 12;
+						inputoverride->day = inputbuffer[2] * 10 + inputbuffer[3];
+						inputoverride->year = inputbuffer[4] * 1000 + inputbuffer[5] * 100 + inputbuffer[6] * 10 + inputbuffer[7];
+						inputoverride->hour = inputbuffer[8] * 10 + inputbuffer[9];
+						inputoverride->minute = inputbuffer[10] * 10 + inputbuffer[11];
+					}
 					inputoverride = NULL;
 					inputdigit = 0;
+					memset (&inputbuffer, 0, sizeof(inputbuffer));
 					RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
 					forceupdate = true;
 					break;
@@ -362,7 +298,7 @@ void loop() {
 		}
 		else if (redoverride.override)
 		{
-			writeTime(RED, RED_MONTH, red_last_month, redoverride.year, redoverride.month-1, redoverride.day, redoverride.hour, redoverride.minute);
+			writeTime(RED, RED_MONTH, red_last_month, redoverride.year, redoverride.month, redoverride.day, redoverride.hour, redoverride.minute);
 		}
 #ifdef CURRENT_TIME_ON_RED
 		else
@@ -384,7 +320,7 @@ void loop() {
 		}
 		else if (yellowoverride.override)
 		{
-			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowoverride.year, yellowoverride.month-1, yellowoverride.day, yellowoverride.hour, yellowoverride.minute);
+			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowoverride.year, yellowoverride.month, yellowoverride.day, yellowoverride.hour, yellowoverride.minute);
 		}
 
 		if (inputoverride == &greenoverride)
@@ -393,7 +329,7 @@ void loop() {
 		}
 		else if (greenoverride.override)
 		{
-			writeTime(GREEN, GREEN_MONTH, green_last_month, greenoverride.year, greenoverride.month-1, greenoverride.day, greenoverride.hour, greenoverride.minute);
+			writeTime(GREEN, GREEN_MONTH, green_last_month, greenoverride.year, greenoverride.month, greenoverride.day, greenoverride.hour, greenoverride.minute);
 		}
 #ifndef CURRENT_TIME_ON_RED
 		else
