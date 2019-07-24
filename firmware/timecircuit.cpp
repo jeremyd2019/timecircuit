@@ -99,16 +99,6 @@ static const char MONTHS[12][3] PROGMEM = {
 	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
 };
 
-struct TimeOverride
-{
-	int16_t year;
-	uint16_t override:1;
-	uint16_t month:4;
-	uint16_t day:5;
-	uint16_t hour:5;
-	uint8_t minute:6;
-};
-
 static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
 {
 	uint8_t twelvehour = hour % 12;
@@ -165,6 +155,16 @@ static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdis
 		last_month = 254;
 	}
 }
+
+struct TimeOverride
+{
+	int16_t year;
+	uint16_t override:1;
+	uint16_t month:4;
+	uint16_t day:5;
+	uint16_t hour:5;
+	uint8_t minute:6;
+};
 
 void loop() {
 	// put your main code here, to run repeatedly:
