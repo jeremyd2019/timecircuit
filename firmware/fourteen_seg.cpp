@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ht16k33.h>
+#include "arduino_utils.h"
 #include "fourteen_seg.h"
 
 // Font compiled from both
@@ -45,5 +46,5 @@ static const uint16_t UPPERCASE_LETTER_FONT[] PROGMEM = {
 void HT16K33QuadAlphanum::writeDigitAscii(uint8_t n, uint8_t character)
 {
     assert(character >= 'A' && character <= 'Z');
-    writeDigitRaw(n, pgm_read_word(&UPPERCASE_LETTER_FONT[character-'A']));
+    writeDigitRaw(n, pgm_read_word_func(&UPPERCASE_LETTER_FONT[character-'A']));
 }

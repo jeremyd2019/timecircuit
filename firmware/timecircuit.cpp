@@ -7,22 +7,17 @@
 #include <time.h>
 #include <util/usa_dst.h>
 
+#include "arduino_utils.h"
 #include "divmod.h"
+#include "subbytearray.h"
 
 #include "seven_seg.h"
 #include "fourteen_seg.h"
-
-#include "subbytearray.h"
 
 ISR(TIMER1_OVF_vect, ISR_NAKED)
 {
 	system_tick();
 	reti();
-}
-
-static inline uint8_t pgm_read_byte_func(const void * p)
-{
-	return pgm_read_byte(p);
 }
 
 static const SubByteArray2D<4, uint8_t, 5, 3, pgm_read_byte_func> KEYMAPPING PROGMEM = {{
@@ -86,7 +81,7 @@ void setup() {
 
 	set_zone(-8 * ONE_HOUR);
 	set_dst(usa_dst);
-	set_system_time(pgm_read_dword(&INITIAL_TIME));
+	set_system_time(pgm_read_dword_func(&INITIAL_TIME));
 	SPI.begin();
 	Wire.begin();
 	pinMode(3, INPUT);
@@ -150,9 +145,9 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 	{
 		const char * monthabbr = MONTHS[month];
 		monthdisplay.writeDigitRaw(0, 0x0);
-		monthdisplay.writeDigitAscii(1, pgm_read_byte(&monthabbr[0]));
-		monthdisplay.writeDigitAscii(2, pgm_read_byte(&monthabbr[1]));
-		monthdisplay.writeDigitAscii(3, pgm_read_byte(&monthabbr[2]));
+		monthdisplay.writeDigitAscii(1, pgm_read_byte_func(&monthabbr[0]));
+		monthdisplay.writeDigitAscii(2, pgm_read_byte_func(&monthabbr[1]));
+		monthdisplay.writeDigitAscii(3, pgm_read_byte_func(&monthabbr[2]));
 		monthdisplay.writeDisplay();
 		last_month = month;
 	}
