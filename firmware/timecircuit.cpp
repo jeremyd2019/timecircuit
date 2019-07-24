@@ -29,11 +29,11 @@ static const SubByteArray2D<4, uint8_t, 5, 3, pgm_read_byte_func> KEYMAPPING PRO
 	0xF // to fill out the even number of elements
 }};
 
-MultiplexMM5450 RED(9), YELLOW(8), GREEN(7);
+MultiplexMM5450 RED(9), GREEN(8), YELLOW(7);
 
-HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70);
-HT16K33QuadAlphanum YELLOW_MONTH = HT16K33QuadAlphanum(0x71);
-HT16K33QuadAlphanum GREEN_MONTH = HT16K33QuadAlphanum(0x72);
+HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70),
+                    GREEN_MONTH = HT16K33QuadAlphanum(0x71),
+                    YELLOW_MONTH = HT16K33QuadAlphanum(0x72);
 
 // TODO current time should be on GREEN, not RED, but I only built RED...
 #define CURRENT_TIME_ON_RED
@@ -87,8 +87,8 @@ void setup() {
 	pinMode(3, INPUT);
 	attachInterrupt(1, onPin3Rising, RISING);
 	setupDisplay(RED, RED_MONTH);
-	setupDisplay(YELLOW, YELLOW_MONTH);
 	setupDisplay(GREEN, GREEN_MONTH);
+	setupDisplay(YELLOW, YELLOW_MONTH);
 	Serial.begin(115200);
 }
 
@@ -168,7 +168,7 @@ static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdis
 
 void loop() {
 	// put your main code here, to run repeatedly:
-	MultiplexMM5450::process({&RED, &YELLOW, &GREEN});
+	MultiplexMM5450::process({&RED, &GREEN, &YELLOW});
 	static time_t serial_input = 0;
 	while (Serial.available())
 	{
@@ -185,7 +185,7 @@ void loop() {
 		}
 	}
 	static SubByteArray<4, uint8_t, 12> inputbuffer = {0};
-	static TimeOverride redoverride = {0}, yellowoverride = {0}, greenoverride = {0};
+	static TimeOverride redoverride = {0}, greenoverride = {0}, yellowoverride = {0};
 	static TimeOverride * inputoverride = NULL;
 	static uint8_t inputdigit = 0;
 	bool forceupdate = false;
@@ -286,7 +286,7 @@ void loop() {
 			polling = false;
 		}
 	}
-	static uint8_t red_last_month = -1, yellow_last_month = -1, green_last_month = -1;
+	static uint8_t red_last_month = -1, green_last_month = -1, yellow_last_month = -1;
 	static time_t last_now = (time_t)-1;
 	time_t now;
 	time(&now);
@@ -314,15 +314,6 @@ void loop() {
 		}
 #endif
 
-		if (inputoverride == &yellowoverride)
-		{
-			clearDisplay(YELLOW, YELLOW_MONTH, yellow_last_month);
-		}
-		else if (yellowoverride.override)
-		{
-			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowoverride.year, yellowoverride.month, yellowoverride.day, yellowoverride.hour, yellowoverride.minute);
-		}
-
 		if (inputoverride == &greenoverride)
 		{
 			clearDisplay(GREEN, GREEN_MONTH, green_last_month);
@@ -345,13 +336,22 @@ void loop() {
 		}
 #endif
 
+		if (inputoverride == &yellowoverride)
+		{
+			clearDisplay(YELLOW, YELLOW_MONTH, yellow_last_month);
+		}
+		else if (yellowoverride.override)
+		{
+			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowoverride.year, yellowoverride.month, yellowoverride.day, yellowoverride.hour, yellowoverride.minute);
+		}
+
 		uint8_t colon = now & 1;
 		RED.assignLed(2,  1, colon);
 		RED.assignLed(2, 30, colon);
-		YELLOW.assignLed(2,  1, colon);
-		YELLOW.assignLed(2, 30, colon);
 		GREEN.assignLed(2,  1, colon);
 		GREEN.assignLed(2, 30, colon);
+		YELLOW.assignLed(2,  1, colon);
+		YELLOW.assignLed(2, 30, colon);
 		last_now = now;
 	}
 }
