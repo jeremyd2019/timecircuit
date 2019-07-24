@@ -42,6 +42,11 @@ HT16K33QuadAlphanum GREEN_MONTH = HT16K33QuadAlphanum(0x72);
 
 // TODO current time should be on GREEN, not RED, but I only built RED...
 #define CURRENT_TIME_ON_RED
+#ifdef CURRENT_TIME_ON_RED
+#define CURRENT_TIME_OVERRIDE redoverride
+#else
+#define CURRENT_TIME_OVERRIDE greenoverride
+#endif
 
 extern const uint32_t PROGMEM INITIAL_TIME;
 
@@ -253,7 +258,7 @@ void loop() {
 						if (inputoverride != NULL)
 							memset(inputoverride, 0, sizeof(*inputoverride));
 						inputoverride = NULL;
-						RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
+						RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE.override ? 0x0F : 0x1F);
 						forceupdate = true;
 					}
 					else
@@ -274,7 +279,7 @@ void loop() {
 					inputoverride = NULL;
 					inputdigit = 0;
 					memset (&inputbuffer, 0, sizeof(inputbuffer));
-					RED.assignLedRange(2, 25, 5, redoverride.override ? 0x0F : 0x1F);
+					RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE.override ? 0x0F : 0x1F);
 					forceupdate = true;
 					break;
 				}
