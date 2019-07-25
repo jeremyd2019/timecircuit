@@ -29,9 +29,9 @@ static const SubByteArray2D<4, uint8_t, 5, 3, pgm_read_byte_func> KEYMAPPING PRO
 	0xF // to fill out the even number of elements
 }};
 
-MultiplexMM5450 RED(9), GREEN(8), YELLOW(7);
+static MultiplexMM5450 RED(9), GREEN(8), YELLOW(7);
 
-HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70),
+static HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70),
                     GREEN_MONTH = HT16K33QuadAlphanum(0x71),
                     YELLOW_MONTH = HT16K33QuadAlphanum(0x72);
 
@@ -192,9 +192,9 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 	writeTime(color, monthdisplay, last_month, value, curtm->tm_mon, curtm->tm_hour);
 }
 
-TimeDisplay_t redvalue = {0}, greenvalue = {0}, yellowvalue = {0};
+static TimeDisplay_t redvalue = {0}, greenvalue = {0}, yellowvalue = {0};
 
-struct
+static struct
 {
 	uint8_t redoverride:1;
 	uint8_t greenoverride:1;
