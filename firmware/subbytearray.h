@@ -152,6 +152,9 @@ public:
         }
 
         inline operator uint8_t() const
+#ifdef __GNUC__
+__attribute__ ((always_inline))
+#endif
         {
             return MemberReader<ReadFunc>::read_member(outer, i);
         }
@@ -272,6 +275,9 @@ public:
         }
 
         inline operator uint8_t() const
+#ifdef __GNUC__
+__attribute__ ((always_inline))
+#endif
         {
             return MemberReader<ReadFunc>::read_member(outer, i);
         }
@@ -357,6 +363,9 @@ public:
         }
 
         inline operator uint8_t() const
+#ifdef __GNUC__
+__attribute__ ((always_inline))
+#endif
         {
             return MemberReader<ReadFunc>::read_member(outer, i);
         }
