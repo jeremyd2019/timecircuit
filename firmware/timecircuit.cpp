@@ -38,9 +38,9 @@ HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70),
 // TODO current time should be on GREEN, not RED, but I only built RED...
 #define CURRENT_TIME_ON_RED
 #ifdef CURRENT_TIME_ON_RED
-#define CURRENT_TIME_OVERRIDE redoverride
+#define CURRENT_TIME_OVERRIDE overrides.redoverride
 #else
-#define CURRENT_TIME_OVERRIDE greenoverride
+#define CURRENT_TIME_OVERRIDE overrides.greenoverride
 #endif
 
 extern const uint32_t PROGMEM INITIAL_TIME;
@@ -71,6 +71,19 @@ static void setupDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdis
 	monthdisplay.displaySetup(true);
 }
 
+static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month)
+{
+	color.assignLedRange(0, 1, 30, 0);
+	color.assignLedRange(1, 2, 28, 0);
+	color.assignLedRange(2, 10, 14, 0);
+	if (last_month != 254)
+	{
+		monthdisplay.clear();
+		monthdisplay.writeDisplay();
+		last_month = 254;
+	}
+}
+
 void setup() {
 	// put your setup code here, to run once:
 	// enable timer 1 to fire an interrupt once per second
@@ -99,38 +112,35 @@ static const char MONTHS[12][3] PROGMEM = {
 	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
 };
 
-static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
+typedef SubByteArray<4, uint8_t, 12> TimeDisplay_t;
+
+static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, const TimeDisplay_t & value, uint8_t month = -1, uint8_t hour = -1)
 {
+	static const uint8_t unspecified = -1;
+	if (hour == unspecified)
+		hour = value[8] * 10 + value[9];
 	uint8_t twelvehour = hour % 12;
 	if (twelvehour == 0)
 		twelvehour = 12;
 	bool pm = hour >= 12;
-	divmod_t<uint8_t> tmp = divmod<uint8_t>(minute, 10);
-	writeDigit(color, 0, 0, tmp.rem);
-	tmp = divmod<uint8_t>(tmp.quot, 10);
-	writeDigit(color, 0, 1, tmp.rem);
+	writeDigit(color, 0, 0, value[11]);
+	writeDigit(color, 0, 1, value[10]);
 	writeDigit(color, 0, 2, twelvehour % 10);
 	writeDigit(color, 0, 3, (twelvehour / 10) % 10);
 	color.assignLed(0, 1, !pm);
 	color.assignLed(0, 30, pm);
 
 	// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
-	if (static_cast<int16_t>(year) < 0)
-		year = -year;
-	divmod_t<uint16_t> tmp2 = divmod<uint16_t>(year, 10);
-	writeDigit(color, 1, 0, tmp2.rem);
-	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
-	writeDigit(color, 1, 1, tmp2.rem);
-	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
-	writeDigit(color, 1, 2, tmp2.rem);
-	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
-	writeDigit(color, 1, 3, tmp2.rem);
+	writeDigit(color, 1, 0, value[7]);
+	writeDigit(color, 1, 1, value[6]);
+	writeDigit(color, 1, 2, value[5]);
+	writeDigit(color, 1, 3, value[4]);
 
-	tmp = divmod<uint8_t>(day, 10);
-	writeDigit(color, 2, 0, tmp.rem);
-	tmp = divmod<uint8_t>(tmp.quot, 10);
-	writeDigit(color, 2, 1, tmp.rem);
+	writeDigit(color, 2, 0, value[3]);
+	writeDigit(color, 2, 1, value[2]);
 
+	if (month == unspecified)
+		month = static_cast<uint8_t>(value[0] * 10 + value[1] - 1) % 12;
 	if (last_month != month)
 	{
 		const char * monthabbr = MONTHS[month];
@@ -143,28 +153,64 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 	}
 }
 
-static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month)
+static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, TimeDisplay_t & value, time_t timeval)
 {
-	color.assignLedRange(0, 1, 30, 0);
-	color.assignLedRange(1, 2, 28, 0);
-	color.assignLedRange(2, 10, 14, 0);
-	if (last_month != 254)
-	{
-		monthdisplay.clear();
-		monthdisplay.writeDisplay();
-		last_month = 254;
-	}
+	struct tm * curtm = localtime(&timeval);
+#ifdef FULL_YEAR_RANGE
+	uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
+#else
+	// doesn't even handle year 10k with only 4 digits, so ignore overflow
+	uint16_t year = curtm->tm_year + 1900;
+#endif
+	// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
+	if (static_cast<int16_t>(year) < 0)
+		year = -year;
+
+	// don't need month filled in, it needs as an integer anyway, so passed in as parameter
+
+	divmod_t<uint8_t> tmp = divmod<uint8_t>(curtm->tm_mday, 10);
+	value[3] = tmp.rem;
+	tmp = divmod<uint8_t>(tmp.quot, 10);
+	value[2] = tmp.rem;
+
+	divmod_t<uint16_t> tmp2 = divmod<uint16_t>(year, 10);
+	value[7] = tmp2.rem;
+	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
+	value[6] = tmp2.rem;
+	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
+	value[5] = tmp2.rem;
+	tmp2 = divmod<uint16_t>(tmp2.quot, 10);
+	value[4] = tmp2.rem;
+
+	// don't need hour filled in, it needs as an integer anyway, so passed in as parameter
+
+	tmp = divmod<uint8_t>(curtm->tm_min, 10);
+	value[11] = tmp.rem;
+	tmp = divmod<uint8_t>(tmp.quot, 10);
+	value[10] = tmp.rem;
+
+	writeTime(color, monthdisplay, last_month, value, curtm->tm_mon, curtm->tm_hour);
 }
 
-struct TimeOverride
+TimeDisplay_t redvalue = {0}, greenvalue = {0}, yellowvalue = {0};
+
+struct
 {
-	int16_t year;
-	uint16_t override:1;
-	uint16_t month:4;
-	uint16_t day:5;
-	uint16_t hour:5;
-	uint8_t minute:6;
-};
+	uint8_t redoverride:1;
+	uint8_t greenoverride:1;
+	uint8_t yellowoverride:1;
+} overrides = {0};
+
+static inline void setOverride(const TimeDisplay_t * color, uint8_t value)
+{
+	if (color == &redvalue)
+		overrides.redoverride = value;
+	else if (color == &greenvalue)
+		overrides.greenoverride = value;
+	else if (color == &yellowvalue)
+		overrides.yellowoverride = value;
+}
+
 
 void loop() {
 	// put your main code here, to run repeatedly:
@@ -184,9 +230,7 @@ void loop() {
 			serial_input = 0;
 		}
 	}
-	static SubByteArray<4, uint8_t, 12> inputbuffer = {0};
-	static TimeOverride redoverride = {0}, greenoverride = {0}, yellowoverride = {0};
-	static TimeOverride * inputoverride = NULL;
+	static TimeDisplay_t * inputbuffer = NULL;
 	static uint8_t inputdigit = 0;
 	bool forceupdate = false;
 	if (polling && lastPollMillis + 25 < millis())
@@ -211,70 +255,67 @@ void loop() {
 				{
 				// GCC extension
 				case 0 ... 9:
-					if (inputoverride != NULL && inputdigit < 12)
-						inputbuffer[inputdigit++] = mappedKey;
+					if (inputbuffer != NULL && inputdigit < 12)
+						(*inputbuffer)[inputdigit++] = mappedKey;
 					break;
 				case 0xA:
-					if (inputoverride != NULL)
-						memset(inputoverride, 0, sizeof(*inputoverride));
+					if (inputbuffer != NULL)
+					{
+						memset(inputbuffer, 0, sizeof(*inputbuffer));
+						setOverride(inputbuffer, 0);
+					}
 					inputdigit = 0;
-					memset (&inputbuffer, 0, sizeof(inputbuffer));
-					inputoverride = &redoverride;
-					memset(inputoverride, 0, sizeof(*inputoverride));
-					inputoverride->override = 1;
+					inputbuffer = &redvalue;
+					memset(inputbuffer, 0, sizeof(*inputbuffer));
 					RED.assignLedRange(2, 25, 5, 0x06);
 					forceupdate = true;
 					break;
 				case 0xB:
-					if (inputoverride != NULL)
-						memset(inputoverride, 0, sizeof(*inputoverride));
+					if (inputbuffer != NULL)
+					{
+						memset(inputbuffer, 0, sizeof(*inputbuffer));
+						setOverride(inputbuffer, 0);
+					}
 					inputdigit = 0;
-					memset (&inputbuffer, 0, sizeof(inputbuffer));
-					inputoverride = &yellowoverride;
-					memset(inputoverride, 0, sizeof(*inputoverride));
-					inputoverride->override = 1;
+					inputbuffer = &yellowvalue;
+					memset(inputbuffer, 0, sizeof(*inputbuffer));
 					RED.assignLedRange(2, 25, 5, 0x05);
 					forceupdate = true;
 					break;
 				case 0xC:
-					if (inputoverride != NULL)
-						memset(inputoverride, 0, sizeof(*inputoverride));
+					if (inputbuffer != NULL)
+					{
+						memset(inputbuffer, 0, sizeof(*inputbuffer));
+						setOverride(inputbuffer, 0);
+					}
 					inputdigit = 0;
-					memset (&inputbuffer, 0, sizeof(inputbuffer));
-					inputoverride = &greenoverride;
-					memset(inputoverride, 0, sizeof(*inputoverride));
-					inputoverride->override = 1;
+					inputbuffer = &greenvalue;
+					memset(inputbuffer, 0, sizeof(*inputbuffer));
 					RED.assignLedRange(2, 25, 5, 0x3);
 					forceupdate = true;
 					break;
 				case 0xD:
 					if (inputdigit == 0)
 					{
-						if (inputoverride != NULL)
-							memset(inputoverride, 0, sizeof(*inputoverride));
-						inputoverride = NULL;
-						RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE.override ? 0x0F : 0x1F);
+						if (inputbuffer != NULL)
+						{
+							memset(inputbuffer, 0, sizeof(*inputbuffer));
+							setOverride(inputbuffer, 0);
+						}
+						inputbuffer = NULL;
+						RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE ? 0x0F : 0x1F);
 						forceupdate = true;
 					}
 					else
 					{
-						inputbuffer[--inputdigit] = 0;
+						(*inputbuffer)[--inputdigit] = 0;
 					}
 					break;
 				case 0xE:
-					if (inputoverride != NULL)
-					{
-						// NOTE this is the only 'input validation', and then only because out-of-range months crash
-						inputoverride->month = static_cast<uint8_t>(inputbuffer[0] * 10 + inputbuffer[1] - 1) % 12;
-						inputoverride->day = inputbuffer[2] * 10 + inputbuffer[3];
-						inputoverride->year = inputbuffer[4] * 1000 + inputbuffer[5] * 100 + inputbuffer[6] * 10 + inputbuffer[7];
-						inputoverride->hour = inputbuffer[8] * 10 + inputbuffer[9];
-						inputoverride->minute = inputbuffer[10] * 10 + inputbuffer[11];
-					}
-					inputoverride = NULL;
+					setOverride(inputbuffer, 1);
+					inputbuffer = NULL;
 					inputdigit = 0;
-					memset (&inputbuffer, 0, sizeof(inputbuffer));
-					RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE.override ? 0x0F : 0x1F);
+					RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE ? 0x0F : 0x1F);
 					forceupdate = true;
 					break;
 				}
@@ -292,57 +333,43 @@ void loop() {
 	time(&now);
 	if (forceupdate || now != last_now)
 	{
-		if (inputoverride == &redoverride)
+		if (inputbuffer == &redvalue)
 		{
 			clearDisplay(RED, RED_MONTH, red_last_month);
 		}
-		else if (redoverride.override)
+		else if (overrides.redoverride)
 		{
-			writeTime(RED, RED_MONTH, red_last_month, redoverride.year, redoverride.month, redoverride.day, redoverride.hour, redoverride.minute);
+			writeTime(RED, RED_MONTH, red_last_month, redvalue);
 		}
 #ifdef CURRENT_TIME_ON_RED
 		else
 		{
-			struct tm * curtm = localtime(&now);
-#ifdef FULL_YEAR_RANGE
-			uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
-#else
-			// doesn't even handle year 10k with only 4 digits, so ignore overflow
-			uint16_t year = curtm->tm_year + 1900;
-#endif
-			writeTime(RED, RED_MONTH, red_last_month, year, curtm->tm_mon, curtm->tm_mday, curtm->tm_hour, curtm->tm_min);
+			writeTime(RED, RED_MONTH, red_last_month, redvalue, now);
 		}
 #endif
 
-		if (inputoverride == &greenoverride)
+		if (inputbuffer == &greenvalue)
 		{
 			clearDisplay(GREEN, GREEN_MONTH, green_last_month);
 		}
-		else if (greenoverride.override)
+		else if (overrides.greenoverride)
 		{
-			writeTime(GREEN, GREEN_MONTH, green_last_month, greenoverride.year, greenoverride.month, greenoverride.day, greenoverride.hour, greenoverride.minute);
+			writeTime(GREEN, GREEN_MONTH, green_last_month, greenvalue);
 		}
 #ifndef CURRENT_TIME_ON_RED
 		else
 		{
-			struct tm * curtm = localtime(&now);
-#ifdef FULL_YEAR_RANGE
-			uint16_t year = (curtm->tm_year >= -1900) ? curtm->tm_year + 1900 : -(curtm->tm_year + 1900);
-#else
-			// doesn't even handle year 10k with only 4 digits, so ignore overflow
-			uint16_t year = curtm->tm_year + 1900;
-#endif
-			writeTime(GREEN, GREEN_MONTH, green_last_month, year, curtm->tm_mon, curtm->tm_mday, curtm->tm_hour, curtm->tm_min);
+			writeTime(GREEN, GREEN_MONTH, green_last_month, greenvalue, now);
 		}
 #endif
 
-		if (inputoverride == &yellowoverride)
+		if (inputbuffer == &yellowvalue)
 		{
 			clearDisplay(YELLOW, YELLOW_MONTH, yellow_last_month);
 		}
-		else if (yellowoverride.override)
+		else if (overrides.yellowoverride)
 		{
-			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowoverride.year, yellowoverride.month, yellowoverride.day, yellowoverride.hour, yellowoverride.minute);
+			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowvalue);
 		}
 
 		uint8_t colon = now & 1;
