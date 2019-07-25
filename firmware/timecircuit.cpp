@@ -14,6 +14,10 @@
 #include "seven_seg.h"
 #include "fourteen_seg.h"
 
+
+// TODO current time should be on GREEN, not RED, but I only built RED...
+#define CURRENT_TIME_ON_RED
+
 ISR(TIMER1_OVF_vect, ISR_NAKED)
 {
 	system_tick();
@@ -29,19 +33,103 @@ static const SubByteArray2D<4, uint8_t, 5, 3, pgm_read_byte_func> KEYMAPPING PRO
 	0xF // to fill out the even number of elements
 }};
 
-static MultiplexMM5450 RED(9), GREEN(8), YELLOW(7);
+static const char MONTHS[12][3] PROGMEM = {
+	{'J','A','N'}, {'F','E','B'}, {'M','A','R'},
+	{'A','P','R'}, {'M','A','Y'}, {'J','U','N'},
+	{'J','U','L'}, {'A','U','G'}, {'S','E','P'},
+	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
+};
 
-static HT16K33QuadAlphanum RED_MONTH = HT16K33QuadAlphanum(0x70),
-                    GREEN_MONTH = HT16K33QuadAlphanum(0x71),
-                    YELLOW_MONTH = HT16K33QuadAlphanum(0x72);
+typedef SubByteArray<4, uint8_t, 12> TimeDisplay_t;
 
-// TODO current time should be on GREEN, not RED, but I only built RED...
-#define CURRENT_TIME_ON_RED
+struct DisplayRow
+{
+	MultiplexMM5450 mm5450;
+	HT16K33QuadAlphanum ht16k33;
+	TimeDisplay_t value;
+	uint8_t last_month;
+
+	inline DisplayRow(uint8_t ss_pin, uint8_t i2c_addr)
+		: mm5450 (ss_pin)
+		, ht16k33 (i2c_addr)
+		, value {0}
+		, last_month (-1)
+	{ }
+
+	void setup()
+	{
+		mm5450.initialize();
+		ht16k33.systemSetup(true);
+		ht16k33.rowIntSet(true, true);
+		ht16k33.dimmingSet(5);
+		// nice all-LEDs-on test pattern
+		for (uint8_t i = 0; i < 4; ++i)
+			ht16k33.writeDigitRaw(i, 0xFFFF);
+		for (uint8_t i = 0; i < 3; ++i)
+			mm5450.assignLedRange(i, 1, 30, 0x3FFFFFFF);
+		ht16k33.writeDisplay();
+		ht16k33.displaySetup(true);
+	}
+
+	void blank()
+	{
+		mm5450.assignLedRange(0, 1, 30, 0);
+		mm5450.assignLedRange(1, 2, 28, 0);
+		mm5450.assignLedRange(2, 10, 14, 0);
+		if (last_month != 254)
+		{
+			ht16k33.clear();
+			ht16k33.writeDisplay();
+			last_month = 254;
+		}
+	}
+
+	inline void updateColon(uint8_t colon)
+	{
+		mm5450.assignLed(2,  1, colon);
+		mm5450.assignLed(2, 30, colon);
+	}
+
+	inline void writeTime()
+	{
+		writeTime(static_cast<uint8_t>(value[0] * 10 + value[1] - 1) % 12, value[8] * 10 + value[9]);
+	}
+
+	void writeTime(time_t timeval);
+
+private:
+	void writeTime(uint8_t month, uint8_t hour);
+};
+
+static DisplayRow RED(9, 0x70), GREEN(8, 0x71), YELLOW(7, 0x72);
+
+struct Overrides
+{
+	uint8_t red:1;
+	uint8_t green:1;
+	uint8_t yellow:1;
+
+	inline bool current() const
+	{
 #ifdef CURRENT_TIME_ON_RED
-#define CURRENT_TIME_OVERRIDE overrides.redoverride
+		return red;
 #else
-#define CURRENT_TIME_OVERRIDE overrides.greenoverride
+		return green;
 #endif
+	}
+
+	inline void set(const TimeDisplay_t * current, uint8_t value)
+	{
+		if (current == &RED.value)
+			red = value;
+		else if (current == &GREEN.value)
+			green = value;
+		else if (current == &YELLOW.value)
+			yellow = value;
+	}
+};
+
+static Overrides overrides = {0};
 
 extern const uint32_t PROGMEM INITIAL_TIME;
 
@@ -53,34 +141,6 @@ static void onPin3Rising()
 	{
 		lastPollMillis = millis();
 		polling = true;
-	}
-}
-
-static void setupDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay)
-{
-	color.initialize();
-	monthdisplay.systemSetup(true);
-	monthdisplay.rowIntSet(true, true);
-	monthdisplay.dimmingSet(5);
-	// nice all-LEDs-on test pattern
-	for (uint8_t i = 0; i < 4; ++i)
-		monthdisplay.writeDigitRaw(i, 0xFFFF);
-	for (uint8_t i = 0; i < 3; ++i)
-		color.assignLedRange(i, 1, 30, 0x3FFFFFFF);
-	monthdisplay.writeDisplay();
-	monthdisplay.displaySetup(true);
-}
-
-static void clearDisplay(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month)
-{
-	color.assignLedRange(0, 1, 30, 0);
-	color.assignLedRange(1, 2, 28, 0);
-	color.assignLedRange(2, 10, 14, 0);
-	if (last_month != 254)
-	{
-		monthdisplay.clear();
-		monthdisplay.writeDisplay();
-		last_month = 254;
 	}
 }
 
@@ -99,61 +159,47 @@ void setup() {
 	Wire.begin();
 	pinMode(3, INPUT);
 	attachInterrupt(1, onPin3Rising, RISING);
-	setupDisplay(RED, RED_MONTH);
-	setupDisplay(GREEN, GREEN_MONTH);
-	setupDisplay(YELLOW, YELLOW_MONTH);
+	RED.setup();
+	GREEN.setup();
+	YELLOW.setup();
 	Serial.begin(115200);
 }
 
-static const char MONTHS[12][3] PROGMEM = {
-	{'J','A','N'}, {'F','E','B'}, {'M','A','R'},
-	{'A','P','R'}, {'M','A','Y'}, {'J','U','N'},
-	{'J','U','L'}, {'A','U','G'}, {'S','E','P'},
-	{'O','C','T'}, {'N','O','V'}, {'D','E','C'}
-};
-
-typedef SubByteArray<4, uint8_t, 12> TimeDisplay_t;
-
-static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, const TimeDisplay_t & value, uint8_t month = -1, uint8_t hour = -1)
+void DisplayRow::writeTime(uint8_t month, uint8_t hour)
 {
-	static const uint8_t unspecified = -1;
-	if (hour == unspecified)
-		hour = value[8] * 10 + value[9];
 	uint8_t twelvehour = hour % 12;
 	if (twelvehour == 0)
 		twelvehour = 12;
 	bool pm = hour >= 12;
-	writeDigit(color, 0, 0, value[11]);
-	writeDigit(color, 0, 1, value[10]);
-	writeDigit(color, 0, 2, twelvehour % 10);
-	writeDigit(color, 0, 3, (twelvehour / 10) % 10);
-	color.assignLed(0, 1, !pm);
-	color.assignLed(0, 30, pm);
+	writeDigit(mm5450, 0, 0, value[11]);
+	writeDigit(mm5450, 0, 1, value[10]);
+	writeDigit(mm5450, 0, 2, twelvehour % 10);
+	writeDigit(mm5450, 0, 3, (twelvehour / 10) % 10);
+	mm5450.assignLed(0, 1, !pm);
+	mm5450.assignLed(0, 30, pm);
 
 	// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
-	writeDigit(color, 1, 0, value[7]);
-	writeDigit(color, 1, 1, value[6]);
-	writeDigit(color, 1, 2, value[5]);
-	writeDigit(color, 1, 3, value[4]);
+	writeDigit(mm5450, 1, 0, value[7]);
+	writeDigit(mm5450, 1, 1, value[6]);
+	writeDigit(mm5450, 1, 2, value[5]);
+	writeDigit(mm5450, 1, 3, value[4]);
 
-	writeDigit(color, 2, 0, value[3]);
-	writeDigit(color, 2, 1, value[2]);
+	writeDigit(mm5450, 2, 0, value[3]);
+	writeDigit(mm5450, 2, 1, value[2]);
 
-	if (month == unspecified)
-		month = static_cast<uint8_t>(value[0] * 10 + value[1] - 1) % 12;
 	if (last_month != month)
 	{
 		const char * monthabbr = MONTHS[month];
-		monthdisplay.writeDigitRaw(0, 0x0);
-		monthdisplay.writeDigitAscii(1, pgm_read_byte_func(&monthabbr[0]));
-		monthdisplay.writeDigitAscii(2, pgm_read_byte_func(&monthabbr[1]));
-		monthdisplay.writeDigitAscii(3, pgm_read_byte_func(&monthabbr[2]));
-		monthdisplay.writeDisplay();
+		ht16k33.writeDigitRaw(0, 0x0);
+		ht16k33.writeDigitAscii(1, pgm_read_byte_func(&monthabbr[0]));
+		ht16k33.writeDigitAscii(2, pgm_read_byte_func(&monthabbr[1]));
+		ht16k33.writeDigitAscii(3, pgm_read_byte_func(&monthabbr[2]));
+		ht16k33.writeDisplay();
 		last_month = month;
 	}
 }
 
-static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdisplay, uint8_t & last_month, TimeDisplay_t & value, time_t timeval)
+void DisplayRow::writeTime(time_t timeval)
 {
 	struct tm * curtm = localtime(&timeval);
 #ifdef FULL_YEAR_RANGE
@@ -189,32 +235,12 @@ static void writeTime(MultiplexMM5450 & color, HT16K33QuadAlphanum & monthdispla
 	tmp = divmod<uint8_t>(tmp.quot, 10);
 	value[10] = tmp.rem;
 
-	writeTime(color, monthdisplay, last_month, value, curtm->tm_mon, curtm->tm_hour);
+	writeTime(curtm->tm_mon, curtm->tm_hour);
 }
-
-static TimeDisplay_t redvalue = {0}, greenvalue = {0}, yellowvalue = {0};
-
-static struct
-{
-	uint8_t redoverride:1;
-	uint8_t greenoverride:1;
-	uint8_t yellowoverride:1;
-} overrides = {0};
-
-static inline void setOverride(const TimeDisplay_t * color, uint8_t value)
-{
-	if (color == &redvalue)
-		overrides.redoverride = value;
-	else if (color == &greenvalue)
-		overrides.greenoverride = value;
-	else if (color == &yellowvalue)
-		overrides.yellowoverride = value;
-}
-
 
 void loop() {
 	// put your main code here, to run repeatedly:
-	MultiplexMM5450::process({&RED, &GREEN, &YELLOW});
+	MultiplexMM5450::process({&RED.mm5450, &GREEN.mm5450, &YELLOW.mm5450});
 	static time_t serial_input = 0;
 	while (Serial.available())
 	{
@@ -235,9 +261,9 @@ void loop() {
 	bool forceupdate = false;
 	if (polling && lastPollMillis + 25 < millis())
 	{
-		RED_MONTH.readKeys();
+		RED.ht16k33.readKeys();
 		static HT16K33Display::KeyPosition lastKeyPressed = {0xF, 0xF};
-		HT16K33Display::KeyPosition keyPressed = RED_MONTH.firstKeySet();
+		HT16K33Display::KeyPosition keyPressed = RED.ht16k33.firstKeySet();
 		bool change = (lastKeyPressed != keyPressed);
 		lastKeyPressed = keyPressed;
 		if (keyPressed.col != 0xF /*|| keyPressed.row != 0xF*/)
@@ -262,36 +288,36 @@ void loop() {
 					if (inputbuffer != NULL)
 					{
 						memset(inputbuffer, 0, sizeof(*inputbuffer));
-						setOverride(inputbuffer, 0);
+						overrides.set(inputbuffer, 0);
 					}
 					inputdigit = 0;
-					inputbuffer = &redvalue;
+					inputbuffer = &RED.value;
 					memset(inputbuffer, 0, sizeof(*inputbuffer));
-					RED.assignLedRange(2, 25, 5, 0x06);
+					RED.mm5450.assignLedRange(2, 25, 5, 0x06);
 					forceupdate = true;
 					break;
 				case 0xB:
 					if (inputbuffer != NULL)
 					{
 						memset(inputbuffer, 0, sizeof(*inputbuffer));
-						setOverride(inputbuffer, 0);
+						overrides.set(inputbuffer, 0);
 					}
 					inputdigit = 0;
-					inputbuffer = &yellowvalue;
+					inputbuffer = &YELLOW.value;
 					memset(inputbuffer, 0, sizeof(*inputbuffer));
-					RED.assignLedRange(2, 25, 5, 0x05);
+					RED.mm5450.assignLedRange(2, 25, 5, 0x05);
 					forceupdate = true;
 					break;
 				case 0xC:
 					if (inputbuffer != NULL)
 					{
 						memset(inputbuffer, 0, sizeof(*inputbuffer));
-						setOverride(inputbuffer, 0);
+						overrides.set(inputbuffer, 0);
 					}
 					inputdigit = 0;
-					inputbuffer = &greenvalue;
+					inputbuffer = &GREEN.value;
 					memset(inputbuffer, 0, sizeof(*inputbuffer));
-					RED.assignLedRange(2, 25, 5, 0x3);
+					RED.mm5450.assignLedRange(2, 25, 5, 0x3);
 					forceupdate = true;
 					break;
 				case 0xD:
@@ -300,10 +326,10 @@ void loop() {
 						if (inputbuffer != NULL)
 						{
 							memset(inputbuffer, 0, sizeof(*inputbuffer));
-							setOverride(inputbuffer, 0);
+							overrides.set(inputbuffer, 0);
 						}
 						inputbuffer = NULL;
-						RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE ? 0x0F : 0x1F);
+						RED.mm5450.assignLedRange(2, 25, 5, overrides.current() ? 0x0F : 0x1F);
 						forceupdate = true;
 					}
 					else
@@ -312,10 +338,10 @@ void loop() {
 					}
 					break;
 				case 0xE:
-					setOverride(inputbuffer, 1);
+					overrides.set(inputbuffer, 1);
 					inputbuffer = NULL;
 					inputdigit = 0;
-					RED.assignLedRange(2, 25, 5, CURRENT_TIME_OVERRIDE ? 0x0F : 0x1F);
+					RED.mm5450.assignLedRange(2, 25, 5, overrides.current() ? 0x0F : 0x1F);
 					forceupdate = true;
 					break;
 				}
@@ -327,58 +353,54 @@ void loop() {
 			polling = false;
 		}
 	}
-	static uint8_t red_last_month = -1, green_last_month = -1, yellow_last_month = -1;
 	static time_t last_now = (time_t)-1;
 	time_t now;
 	time(&now);
 	if (forceupdate || now != last_now)
 	{
-		if (inputbuffer == &redvalue)
+		if (inputbuffer == &RED.value)
 		{
-			clearDisplay(RED, RED_MONTH, red_last_month);
+			RED.blank();
 		}
-		else if (overrides.redoverride)
+		else if (overrides.red)
 		{
-			writeTime(RED, RED_MONTH, red_last_month, redvalue);
+			RED.writeTime();
 		}
 #ifdef CURRENT_TIME_ON_RED
 		else
 		{
-			writeTime(RED, RED_MONTH, red_last_month, redvalue, now);
+			RED.writeTime(now);
 		}
 #endif
 
-		if (inputbuffer == &greenvalue)
+		if (inputbuffer == &GREEN.value)
 		{
-			clearDisplay(GREEN, GREEN_MONTH, green_last_month);
+			GREEN.blank();
 		}
-		else if (overrides.greenoverride)
+		else if (overrides.green)
 		{
-			writeTime(GREEN, GREEN_MONTH, green_last_month, greenvalue);
+			GREEN.writeTime();
 		}
 #ifndef CURRENT_TIME_ON_RED
 		else
 		{
-			writeTime(GREEN, GREEN_MONTH, green_last_month, greenvalue, now);
+			GREEN.writeTime(now);
 		}
 #endif
 
-		if (inputbuffer == &yellowvalue)
+		if (inputbuffer == &YELLOW.value)
 		{
-			clearDisplay(YELLOW, YELLOW_MONTH, yellow_last_month);
+			YELLOW.blank();
 		}
-		else if (overrides.yellowoverride)
+		else if (overrides.yellow)
 		{
-			writeTime(YELLOW, YELLOW_MONTH, yellow_last_month, yellowvalue);
+			YELLOW.writeTime();
 		}
 
 		uint8_t colon = now & 1;
-		RED.assignLed(2,  1, colon);
-		RED.assignLed(2, 30, colon);
-		GREEN.assignLed(2,  1, colon);
-		GREEN.assignLed(2, 30, colon);
-		YELLOW.assignLed(2,  1, colon);
-		YELLOW.assignLed(2, 30, colon);
+		RED.updateColon(colon);
+		GREEN.updateColon(colon);
+		YELLOW.updateColon(colon);
 		last_now = now;
 	}
 }
