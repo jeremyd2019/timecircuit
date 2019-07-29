@@ -23,5 +23,7 @@ clean:
 prepare:
 	unzip -o timecircuit_display_row.fzz
 	perl cleanup_pre_commit.pl timecircuit_display_row.fz > timecircuit_display_row.fz.new
+	perl cleanup_pre_commit.pl bttf_keypad.fz > bttf_keypad.fz.new
 	mv -f timecircuit_display_row.fz.new timecircuit_display_row.fz
+	mv -f bttf_keypad.fz.new bttf_keypad.fz
 
