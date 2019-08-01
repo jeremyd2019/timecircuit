@@ -238,6 +238,19 @@ void DisplayRow::writeTime(time_t timeval)
 	writeTime(curtm->tm_mon, curtm->tm_hour);
 }
 
+static time_t parsetime(const TimeDisplay_t & input)
+{
+	struct tm parsed = {0};
+	// tm_isdst must be negative for mktime to determine if DST should be in effect
+	parsed.tm_isdst = -1;
+	parsed.tm_mon = input[0] * 10 + input[1] - 1;
+	parsed.tm_mday = input[2] * 10 + input[3];
+	parsed.tm_year = input[4] * 1000 + input[5] * 100 + input[6] * 10 + input[7] - 1900;
+	parsed.tm_hour = input[8] * 10 + input[9];
+	parsed.tm_min = input[10] * 10 + input[11];
+	return mktime(&parsed);
+}
+
 void loop() {
 	// put your main code here, to run repeatedly:
 	MultiplexMM5450::process({&RED.mm5450, &GREEN.mm5450, &YELLOW.mm5450});
@@ -327,6 +340,16 @@ void loop() {
 						{
 							memset(inputbuffer, 0, sizeof(*inputbuffer));
 							overrides.set(inputbuffer, 0);
+						}
+						else if (overrides.current())
+						{
+#ifdef CURRENT_TIME_ON_RED
+							set_system_time(parsetime(RED.value));
+							overrides.red = 0;
+#else
+							set_system_time(parsetime(GREEN.value));
+							overrides.green = 0;
+#endif
 						}
 						inputbuffer = NULL;
 						RED.mm5450.assignLedRange(2, 25, 5, overrides.current() ? 0x0F : 0x1F);
