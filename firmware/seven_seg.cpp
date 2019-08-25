@@ -33,20 +33,20 @@ static const uint8_t SWIZZLE_N_BITS[28] PROGMEM = {
 
 // MMM DD YYYY(am/pm)HH(colon)MM
 // I'm thinking YYYY on bank 1, HHMM plus am/pm leds on bank 0, and DD plus colon on bank 2
-void writeDigit(MultiplexMM5450 & color, uint8_t bankno, uint8_t digitno, uint8_t digit)
+void MultiplexMM5450SevenSeg::writeDigit(uint8_t bankno, uint8_t digitno, uint8_t digit)
 {
 	assert(bankno < 3 && digitno < 4 && digit < 10);
 #ifdef SANE_SOFTWARE
-	color.assignLedRange(bankno, digitno*7 + 1, 7, pgm_read_byte_func(&sevenseg_font[digit]);
+	assignLedRange(bankno, digitno*7 + 1, 7, pgm_read_byte_func(&sevenseg_font[digit]);
 #else
 	uint8_t glyph = pgm_read_byte_func(&sevenseg_font[digit]);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 0]), glyph & 0x01);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 1]), glyph & 0x02);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 2]), glyph & 0x04);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 3]), glyph & 0x08);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 4]), glyph & 0x10);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 5]), glyph & 0x20);
-	color.assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 6]), glyph & 0x40);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 0]), glyph & 0x01);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 1]), glyph & 0x02);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 2]), glyph & 0x04);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 3]), glyph & 0x08);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 4]), glyph & 0x10);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 5]), glyph & 0x20);
+	assignLed(bankno, pgm_read_byte_func(&SWIZZLE_N_BITS[digitno * 7 + 6]), glyph & 0x40);
 #endif
 }
 

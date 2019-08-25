@@ -4,7 +4,14 @@
 #define _SEVEN_SEG_h
 #include <mm5450.h>
 
-void writeDigit(MultiplexMM5450 & color, uint8_t bankno, uint8_t digitno, uint8_t digit);
+class MultiplexMM5450SevenSeg : public MultiplexMM5450
+{
+public:
+    inline MultiplexMM5450SevenSeg(uint8_t ss_pin)
+        : MultiplexMM5450(ss_pin)
+    { }
+
+    void writeDigit(uint8_t bankno, uint8_t digitno, uint8_t digit);
+};
 
 #endif
-

@@ -44,7 +44,7 @@ typedef SubByteArray<4, uint8_t, 12> TimeDisplay_t;
 
 struct DisplayRow
 {
-	MultiplexMM5450 mm5450;
+	MultiplexMM5450SevenSeg mm5450;
 	HT16K33QuadAlphanum ht16k33;
 	TimeDisplay_t value;
 	uint8_t last_month;
@@ -171,21 +171,21 @@ void DisplayRow::writeTime(uint8_t month, uint8_t hour)
 	if (twelvehour == 0)
 		twelvehour = 12;
 	bool pm = hour >= 12;
-	writeDigit(mm5450, 0, 0, value[11]);
-	writeDigit(mm5450, 0, 1, value[10]);
-	writeDigit(mm5450, 0, 2, twelvehour % 10);
-	writeDigit(mm5450, 0, 3, (twelvehour / 10) % 10);
+	mm5450.writeDigit(0, 0, value[11]);
+	mm5450.writeDigit(0, 1, value[10]);
+	mm5450.writeDigit(0, 2, twelvehour % 10);
+	mm5450.writeDigit(0, 3, (twelvehour / 10) % 10);
 	mm5450.assignLed(0, 1, !pm);
 	mm5450.assignLed(0, 30, pm);
 
 	// TODO: BC flag?  Year 0? (movie shows DEC 25 0000 as birth-of-christ)
-	writeDigit(mm5450, 1, 0, value[7]);
-	writeDigit(mm5450, 1, 1, value[6]);
-	writeDigit(mm5450, 1, 2, value[5]);
-	writeDigit(mm5450, 1, 3, value[4]);
+	mm5450.writeDigit(1, 0, value[7]);
+	mm5450.writeDigit(1, 1, value[6]);
+	mm5450.writeDigit(1, 2, value[5]);
+	mm5450.writeDigit(1, 3, value[4]);
 
-	writeDigit(mm5450, 2, 0, value[3]);
-	writeDigit(mm5450, 2, 1, value[2]);
+	mm5450.writeDigit(2, 0, value[3]);
+	mm5450.writeDigit(2, 1, value[2]);
 
 	if (last_month != month)
 	{
