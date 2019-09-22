@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <assert.h>
+#include <EEPROM.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <mm5450.h>
@@ -48,12 +49,14 @@ struct DisplayRow
 	HT16K33QuadAlphanum ht16k33;
 	TimeDisplay_t value;
 	uint8_t last_month;
+	uint8_t display_num;
 
 	inline DisplayRow(uint8_t ss_pin, uint8_t i2c_addr)
 		: mm5450 (ss_pin)
 		, ht16k33 (i2c_addr)
 		, value {0}
 		, last_month (-1)
+		, display_num (i2c_addr & 7)
 	{ }
 
 	void setup()
@@ -61,7 +64,7 @@ struct DisplayRow
 		mm5450.initialize();
 		ht16k33.systemSetup(true);
 		ht16k33.rowIntSet(true, true);
-		ht16k33.dimmingSet(5);
+		ht16k33.dimmingSet(EEPROM.read(display_num + 4));
 		// nice all-LEDs-on test pattern
 		for (uint8_t i = 0; i < 4; ++i)
 			ht16k33.writeDigitRaw(i, 0xFFFF);
@@ -155,6 +158,16 @@ void setup() {
 	set_zone(-8 * ONE_HOUR);
 	set_dst(usa_dst);
 	set_system_time(pgm_read_dword_func(&INITIAL_TIME));
+
+	uint32_t tmp;
+	if (EEPROM.get(0, tmp) != pgm_read_dword_func(&INITIAL_TIME))
+	{
+		EEPROM.write(4, 5);
+		EEPROM.write(5, 5);
+		EEPROM.write(6, 5);
+		EEPROM.put(0, pgm_read_dword_func(&INITIAL_TIME));
+	}
+
 	SPI.begin();
 	Wire.begin();
 	pinMode(3, INPUT);
@@ -264,8 +277,37 @@ void loop() {
 		}
 		else
 		{
-			if ((ch == '\r' || ch == '\n') && serial_input != 0)
-				set_system_time(serial_input - UNIX_OFFSET);
+			switch (ch)
+			{
+				case '\r':
+				case '\n':
+					if (serial_input != 0)
+						set_system_time(serial_input - UNIX_OFFSET);
+					break;
+				case 'R':
+					if (serial_input > 0 && serial_input <= 16)
+					{
+						EEPROM.write(4, serial_input);
+						RED.ht16k33.dimmingSet(serial_input);
+					}
+					break;
+				case 'G':
+					if (serial_input > 0 && serial_input <= 16)
+					{
+						EEPROM.write(5, serial_input);
+						GREEN.ht16k33.dimmingSet(serial_input);
+					}
+					break;
+				case 'Y':
+					if (serial_input > 0 && serial_input <= 16)
+					{
+						EEPROM.write(6, serial_input);
+						YELLOW.ht16k33.dimmingSet(serial_input);
+					}
+					break;
+				default:
+					break;
+			}
 			serial_input = 0;
 		}
 	}
