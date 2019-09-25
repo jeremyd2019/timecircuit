@@ -74,6 +74,15 @@ struct DisplayRow
 		ht16k33.displaySetup(true);
 	}
 
+	void updateBrightness(uint8_t brightness)
+	{
+		if (brightness > 0 && brightness <= 16)
+		{
+			EEPROM.write(display_num + 4, brightness);
+			ht16k33.dimmingSet(brightness);
+		}
+	}
+
 	void blank()
 	{
 		mm5450.assignLedRange(0, 1, 30, 0);
@@ -285,27 +294,13 @@ void loop() {
 						set_system_time(serial_input - UNIX_OFFSET);
 					break;
 				case 'R':
-					if (serial_input > 0 && serial_input <= 16)
-					{
-						EEPROM.write(4, serial_input);
-						RED.ht16k33.dimmingSet(serial_input);
-					}
+					RED.updateBrightness(serial_input);
 					break;
 				case 'G':
-					if (serial_input > 0 && serial_input <= 16)
-					{
-						EEPROM.write(5, serial_input);
-						GREEN.ht16k33.dimmingSet(serial_input);
-					}
+					GREEN.updateBrightness(serial_input);
 					break;
 				case 'Y':
-					if (serial_input > 0 && serial_input <= 16)
-					{
-						EEPROM.write(6, serial_input);
-						YELLOW.ht16k33.dimmingSet(serial_input);
-					}
-					break;
-				default:
+					YELLOW.updateBrightness(serial_input);
 					break;
 			}
 			serial_input = 0;
